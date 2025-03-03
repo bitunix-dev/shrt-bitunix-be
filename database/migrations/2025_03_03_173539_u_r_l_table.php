@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('urls', function (Blueprint $table) {
             $table->id();
             $table->text('destination_url');
-            $table->string('short_link', 10)->unique(); // Batasi panjang short link
+            $table->text('short_link'); // Batasi panjang short link
             $table->longText('qr_code')->nullable();
             $table->string('source')->nullable()->index();
             $table->string('medium')->nullable()->index();

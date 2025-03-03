@@ -43,7 +43,7 @@ class UrlController extends Controller
         // Simpan URL ke database
         $url = Url::create([
             'destination_url' => $request->destination_url,
-            'short_link' => $shortLink,
+            'short_link' => "dub.sh/".$shortLink,
             'source' => $request->source,
             'medium' => $request->medium,
             'campaign' => $request->campaign,
@@ -98,6 +98,7 @@ class UrlController extends Controller
             'term' => 'nullable|string',
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
+            'short_link' => 'nullable|string',
         ]);
 
         // Update URL data
@@ -109,6 +110,7 @@ class UrlController extends Controller
             'term',
             'content',
             'referral',
+            'short_link',
         ]));
 
         // If destination URL changes, regenerate QR code
