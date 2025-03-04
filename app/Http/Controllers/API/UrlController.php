@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClickLog;
+use Illuminate\Support\Facades\Cookie;
 use App\Models\Url;
 use App\Models\Tag;
 use Illuminate\Http\Request;
@@ -167,14 +169,35 @@ class UrlController extends Controller
     /**
      * Redirect to the original URL with UTM parameters.
      */
-    public function redirect($shortLink)
+    public function redirect($shortLink, Request $request)
     {
         $url = Url::where('short_link', $shortLink)->firstOrFail();
-    
-        // Increment click count
-        $url->increment('clicks');
-    
-        // Build UTM Parameters
+
+        $ipAddress = $request->ip();
+        $cookieName = 'visited_' . $url->id;
+
+        // Cek apakah pengguna sudah klik dalam 24 jam (via database)
+        $alreadyClicked = ClickLog::where('url_id', $url->id)
+            ->where('ip_address', $ipAddress)
+            ->where('created_at', '>=', now()->subHours(24)) // Bisa diubah ke berapa jam
+            ->exists();
+
+        // Cek apakah cookie sudah ada
+        if (!$alreadyClicked && !$request->cookie($cookieName)) {
+            // Tambah log klik
+            ClickLog::create([
+                'url_id' => $url->id,
+                'ip_address' => $ipAddress
+            ]);
+
+            // Tambah count klik
+            $url->increment('clicks');
+
+            // Set cookie agar tidak bisa dihitung lagi dalam 24 jam
+            Cookie::queue($cookieName, true, 1440); // 1440 = 24 jam
+        }
+
+        // Redirect ke URL tujuan dengan UTM tracking
         $utmParams = collect([
             'utm_source' => $url->source,
             'utm_medium' => $url->medium,
@@ -182,15 +205,10 @@ class UrlController extends Controller
             'utm_term' => $url->term,
             'utm_content' => $url->content,
             'ref' => $url->referral,
-        ])->filter()->toArray(); // Menghapus parameter yang kosong
-    
-        // Append parameters ke URL
-        $destinationUrl = $url->destination_url;
-        if (!empty($utmParams)) {
-            $separator = (str_contains($destinationUrl, '?') ? '&' : '?');
-            $destinationUrl .= $separator . http_build_query($utmParams);
-        }
-    
+        ])->filter()->toArray();
+
+        $destinationUrl = $url->destination_url . (!empty($utmParams) ? '?' . http_build_query($utmParams) : '');
+
         return redirect($destinationUrl);
     }
     
