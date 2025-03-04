@@ -25,7 +25,7 @@ class UrlController extends Controller
         $urls = Url::with('tags')->get();
         return response()->json(['data' => $urls], 200);
     }
-
+    
     /**
      * Store a newly created resource in storage.
      */
