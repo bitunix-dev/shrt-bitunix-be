@@ -203,5 +203,24 @@ class UrlController extends Controller
         // Generate QR Code sebagai Base64 (PNG tanpa Imagick)
         return base64_encode(QrCode::format('png')->size(300)->errorCorrection('H')->generate($redirectUrl));
     }
-    
+    public function getQrCode($id)
+    {
+        $url = Url::findOrFail($id);
+
+        if (!$url->qr_code) {
+            return response()->json(['message' => 'QR Code not found'], 404);
+        }
+
+        // Decode Base64 ke Binary PNG
+        $qrCodeBinary = base64_decode($url->qr_code);
+
+        // Generate nama file berdasarkan short link atau ID
+        $fileName = 'qrcode_' . $url->short_link . '.png';
+
+        // Buat response gambar PNG dengan nama file unik
+        return response($qrCodeBinary)
+            ->header('Content-Type', 'image/png')
+            ->header('Content-Disposition', 'inline; filename="' . $fileName . '"');
+    }
+
 }    

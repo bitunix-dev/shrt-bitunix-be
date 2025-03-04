@@ -10,3 +10,4 @@ Route::apiResource('urls', UrlController::class);
 Route::apiResource('sources', SourceController::class);
 Route::apiResource('mediums', MediumController::class);
 Route::apiResource('tags', TagController::class);
+Route::get('/qr/{id}', [UrlController::class, 'getQrCode']);
