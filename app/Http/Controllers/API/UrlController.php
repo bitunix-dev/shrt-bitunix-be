@@ -7,6 +7,8 @@ use App\Models\ClickLog;
 use Illuminate\Support\Facades\Cookie;
 use App\Models\Url;
 use App\Models\Tag;
+use App\Models\Source;
+use App\Models\Medium;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -42,18 +44,24 @@ class UrlController extends Controller
         // Generate short link unik
         $shortLink = $this->generateUniqueShortLink();
     
-        // Normalisasi dan Simpan Source
-        $source = $this->normalizeAndStore('App\Models\Source', $request->source);
+        // Normalisasi Source dan Medium (disimpan di tabel masing-masing jika belum ada)
+        $sourceName = $this->normalize($request->source);
+        $mediumName = $this->normalize($request->medium);
     
-        // Normalisasi dan Simpan Medium
-        $medium = $this->normalizeAndStore('App\Models\Medium', $request->medium);
+        if ($sourceName) {
+            Source::firstOrCreate(['name' => $sourceName]);
+        }
     
-        // Simpan URL ke database
+        if ($mediumName) {
+            Medium::firstOrCreate(['name' => $mediumName]);
+        }
+    
+        // Simpan URL ke database (source & medium tetap sebagai string)
         $url = Url::create([
             'destination_url' => $request->destination_url,
             'short_link' => "short.bitunixads.com/" . $shortLink,
-            'source_id' => $source?->id, // Pakai ID jika ada
-            'medium_id' => $medium?->id, // Pakai ID jika ada
+            'source' => $sourceName,
+            'medium' => $mediumName,
             'campaign' => $request->campaign,
             'term' => $request->term,
             'content' => $request->content,
@@ -64,11 +72,12 @@ class UrlController extends Controller
         $url->qr_code = $this->generateQRCode($url);
         $url->save();
     
-        // Attach tags jika ada
+        // Attach tags ke URL jika ada
         if ($request->has('tags') && is_array($request->tags)) {
             $tagIds = [];
             foreach ($request->tags as $tagName) {
-                $tag = $this->normalizeAndStore('App\Models\Tag', $tagName);
+                $normalizedTag = $this->normalize($tagName);
+                $tag = Tag::firstOrCreate(['name' => $normalizedTag]);
                 $tagIds[] = $tag->id;
             }
             $url->tags()->sync($tagIds);
@@ -78,15 +87,14 @@ class UrlController extends Controller
         return response()->json(['data' => $url, 'message' => 'URL created successfully'], 201);
     }
     
-    private function normalizeAndStore($model, $name)
+    /**
+     * Normalisasi string: ubah huruf kecil dan ganti spasi dengan dash (-)
+     */
+    private function normalize($name)
     {
-        if (!$name) {
-            return null; // Jika kosong, tidak perlu simpan
-        }
-
-        $normalized = strtolower(str_replace(' ', '-', trim($name))); // Huruf kecil & spasi ke dash
-        return $model::firstOrCreate(['name' => $normalized]);
+        return $name ? strtolower(str_replace(' ', '-', trim($name))) : null;
     }
+    
 
 
     /**
