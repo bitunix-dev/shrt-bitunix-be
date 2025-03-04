@@ -42,9 +42,7 @@
 
         body {
             background-color: #000;
-            /* Warna dasar */
             color: #b9f641;
-            /* Warna teks */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -65,18 +63,16 @@
                 radial-gradient(circle at 50% 80%, rgba(185, 246, 65, 0.10) 0%, transparent 50%);
             z-index: -1;
             filter: blur(50px);
-            /* Blur lebih kecil untuk efek lebih soft */
             animation: fadeGlow 5s infinite alternate ease-in-out;
-            /* Animasi redup-nyala */
         }
 
         @keyframes fadeGlow {
             0% {
-                opacity: 0.35;
+                opacity: 0.15;
             }
 
             100% {
-                opacity: 0.65;
+                opacity: 0.45;
             }
         }
 
@@ -88,7 +84,7 @@
             z-index: 1;
         }
 
-        h4 {
+        h5 {
             font-size: 18px;
             margin-bottom: 10px;
             position: relative;
@@ -101,6 +97,37 @@
             opacity: 0.8;
             position: relative;
             z-index: 1;
+        }
+
+        /* Icon Navigation */
+        .icon-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .icon-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid rgba(185, 246, 65, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .icon-link:hover {
+            background: rgba(185, 246, 65, 0.2);
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            color: #b9f641;
         }
     </style>
 </head>
@@ -117,8 +144,27 @@
     <h5>This website is for API consumption only and for internal use only.</h5>
 
     <!-- Copyright -->
-    <p class="copyright text-muted">&copy; 2025 Bitunix.io | All developed by Bintang Tobing, Marketing and
-        Technology Manager.</p>
+    <p class="copyright text-muted">&copy; 2025 Bitunix.io | All developed by Bintang Tobing, Marketing and Technology
+        Manager.</p>
+
+    <!-- Icon Links -->
+    <div class="icon-container">
+        <a href="https://v8vvjmqhky.apidog.io/" class="icon-link" target="_blank">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M6 2C4.343 2 3 3.343 3 5v14c0 1.657 1.343 3 3 3h12c1.657 0 3-1.343 3-3V5c0-1.657-1.343-3-3-3H6zm0 2h12c.552 0 1 .448 1 1v14c0 .552-.448 1-1 1H6c-.552 0-1-.448-1-1V5c0-.552.448-1 1-1zM8 6v2h8V6H8zm0 4v2h8v-2H8zm0 4v2h8v-2H8z">
+                </path>
+            </svg>
+        </a>
+
+        <a href="/telescope" class="icon-link">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M11 17c-1.042 0-2.041-.303-2.897-.849L5.328 19.03l-1.414-1.415 2.878-2.876A6.987 6.987 0 0 1 4 10c0-3.866 3.134-7 7-7s7 3.134 7 7-3.134 7-7 7zm0-12C7.691 5 5 7.691 5 11s2.691 6 6 6 6-2.691 6-6-2.691-6-6-6zm8.707 14.293l-4-4-1.414 1.414 4 4 1.414-1.414z">
+                </path>
+            </svg>
+        </a>
+    </div>
 
 </body>
 
