@@ -18,7 +18,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: "8.3"
 
       - name: Install Dependencies
         run: |
@@ -37,4 +37,23 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           sshpass -p 'c#)rgPMzNC2998@Vb4.M' rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" ./ root@147.93.30.80:/var/www/shrt-bitunix-be/
-          sshpass -p 'c#)rgPMzNC2998@Vb4.M' ssh -o StrictHostKeyChecking=no root@147.93.30.80 'cd /var/www/shrt-bitunix-be && php artisan key:generate --ansi && php artisan migrate && php artisan optimize:clear && php artisan storage:link && php artisan config:clear'
+
+          sshpass -p 'c#)rgPMzNC2998@Vb4.M' ssh -o StrictHostKeyChecking=no root@147.93.30.80 << 'EOF'
+            cd /var/www/shrt-bitunix-be
+
+            # Set Permissions
+            chown -R www-data:www-data /var/www/shrt-bitunix-be
+            chmod -R 775 /var/www/shrt-bitunix-be/storage /var/www/shrt-bitunix-be/bootstrap/cache
+            chown -R www-data:www-data /var/www/shrt-bitunix-be/storage /var/www/shrt-bitunix-be/bootstrap/cache
+            chmod -R 777 /var/www/shrt-bitunix-be/storage /var/www/shrt-bitunix-be/bootstrap/cache
+
+            # Laravel Commands
+            php8.3 artisan key:generate --ansi
+            php8.3 artisan migrate --force
+            php8.3 artisan optimize:clear
+            php8.3 artisan storage:link
+            php8.3 artisan config:clear
+            php8.3 artisan cache:clear
+            php8.3 artisan route:clear
+            php8.3 artisan view:clear
+          EOF
