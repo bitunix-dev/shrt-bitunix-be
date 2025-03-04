@@ -7,6 +7,7 @@ use App\Http\Controllers\API\TagController;
 use Illuminate\Support\Facades\Route;
 
 Route::apiResource('urls', UrlController::class);
+Route::get('/redirect/{shortLink}', [UrlController::class, 'redirect']);
 Route::apiResource('sources', SourceController::class);
 Route::apiResource('mediums', MediumController::class);
 Route::apiResource('tags', TagController::class);
