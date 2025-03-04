@@ -51,7 +51,7 @@ class UrlController extends Controller
         // Simpan URL ke database
         $url = Url::create([
             'destination_url' => $request->destination_url,
-            'short_link' => "dub.sh/" . $shortLink,
+            'short_link' => "short.bitunixads.com/" . $shortLink,
             'source_id' => $source?->id, // Pakai ID jika ada
             'medium_id' => $medium?->id, // Pakai ID jika ada
             'campaign' => $request->campaign,
