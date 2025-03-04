@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\ClickLog;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Url;
 use App\Models\Tag;
 use App\Models\Source;
@@ -179,7 +180,10 @@ class UrlController extends Controller
      */
     public function redirect($shortLink, Request $request)
     {
-        $url = Url::where('short_link', $shortLink)->firstOrFail();
+        $url = Url::where('short_link', "short.bitunixads.com/" . $shortLink)->firstOrFail();
+
+        // Increment click count, hindari duplikasi klik berdasarkan IP dalam 1 jam
+        $this->incrementClicks($url);
 
         $ipAddress = $request->ip();
         $cookieName = 'visited_' . $url->id;
@@ -215,7 +219,11 @@ class UrlController extends Controller
             'ref' => $url->referral,
         ])->filter()->toArray();
 
-        $destinationUrl = $url->destination_url . (!empty($utmParams) ? '?' . http_build_query($utmParams) : '');
+        $destinationUrl = $url->destination_url;
+        if (!empty($utmParams)) {
+            $separator = (str_contains($destinationUrl, '?') ? '&' : '?');
+            $destinationUrl .= $separator . http_build_query($utmParams);
+        }
 
         return redirect($destinationUrl);
     }
@@ -242,6 +250,16 @@ class UrlController extends Controller
     
         // Generate QR Code sebagai Base64 (PNG tanpa Imagick)
         return base64_encode(QrCode::format('png')->size(300)->errorCorrection('H')->generate($redirectUrl));
+    }
+    private function incrementClicks(Url $url)
+    {
+        $ip = request()->ip();
+        $cacheKey = "url_clicks:{$url->id}:{$ip}";
+
+        if (!Cache::has($cacheKey)) {
+            $url->increment('clicks');
+            Cache::put($cacheKey, true, now()->addHour()); // Simpan cache 1 jam
+        }
     }
     public function getQrCode($id)
     {
