@@ -17,13 +17,13 @@ use Illuminate\Support\Facades\Storage;
 
 class UrlController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         $urls = Url::with('tags')->get();
-        return response()->json(['data' => $urls], 200);
+        return response()->json([
+            'status' => 200,
+            'data' => $urls
+        ], 200);
     }
     
     /**
@@ -42,47 +42,61 @@ class UrlController extends Controller
             'referral' => 'nullable|string',
         ]);
     
-        // Generate short link unik
-        $shortLink = $this->generateUniqueShortLink();
+        try {
+            // Generate short link unik
+            $shortLink = $this->generateUniqueShortLink();
     
-        // Normalisasi Source dan Medium (disimpan di tabel masing-masing jika belum ada)
-        $sourceName = $this->normalize($request->source);
-        $mediumName = $this->normalize($request->medium);
+            // Normalisasi Source dan Medium (disimpan di tabel masing-masing jika belum ada)
+            $sourceName = $this->normalize($request->source);
+            $mediumName = $this->normalize($request->medium);
     
-        if ($sourceName) {
-            Source::firstOrCreate(['name' => $sourceName]);
-        }
-    
-        if ($mediumName) {
-            Medium::firstOrCreate(['name' => $mediumName]);
-        }
-    
-        // Simpan URL ke database (source & medium tetap sebagai string)
-        $url = Url::create([
-            'destination_url' => $request->destination_url,
-            'short_link' => "short.bitunixads.com/" . $shortLink,
-            'source' => $sourceName,
-            'medium' => $mediumName,
-            'campaign' => $request->campaign,
-            'term' => $request->term,
-            'content' => $request->content,
-            'referral' => $request->referral,
-        ]);
-        $url->save();
-    
-        // Attach tags ke URL jika ada
-        if ($request->has('tags') && is_array($request->tags)) {
-            $tagIds = [];
-            foreach ($request->tags as $tagName) {
-                $normalizedTag = $this->normalize($tagName);
-                $tag = Tag::firstOrCreate(['name' => $normalizedTag]);
-                $tagIds[] = $tag->id;
+            if ($sourceName) {
+                Source::firstOrCreate(['name' => $sourceName]);
             }
-            $url->tags()->sync($tagIds);
-        }
     
-        $url->load('tags');
-        return response()->json(['data' => $url, 'message' => 'URL created successfully'], 201);
+            if ($mediumName) {
+                Medium::firstOrCreate(['name' => $mediumName]);
+            }
+    
+            // Simpan URL ke database (source & medium tetap sebagai string)
+            $url = Url::create([
+                'destination_url' => $request->destination_url,
+                'short_link' => "short.bitunixads.com/" . $shortLink,
+                'source' => $sourceName,
+                'medium' => $mediumName,
+                'campaign' => $request->campaign,
+                'term' => $request->term,
+                'content' => $request->content,
+                'referral' => $request->referral,
+            ]);
+            $url->save();
+    
+            // Attach tags ke URL jika ada
+            if ($request->has('tags') && is_array($request->tags)) {
+                $tagIds = [];
+                foreach ($request->tags as $tagName) {
+                    $normalizedTag = $this->normalize($tagName);
+                    $tag = Tag::firstOrCreate(['name' => $normalizedTag]);
+                    $tagIds[] = $tag->id;
+                }
+                $url->tags()->sync($tagIds);
+            }
+    
+            $url->load('tags');
+    
+            return response()->json([
+                'status' => 201,
+                'data' => $url,
+                'message' => 'URL created successfully'
+            ], 201);
+    
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 500,
+                'message' => 'Failed to create URL',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
     
     /**
@@ -93,15 +107,24 @@ class UrlController extends Controller
         return $name ? strtolower(str_replace(' ', '-', trim($name))) : null;
     }
     
-
-
-    /**
-     * Display the specified resource.
-     */
+/**
+ * Display the specified resource.
+ */
     public function show($id)
     {
-        $url = Url::with('tags')->findOrFail($id);
-        return response()->json(['data' => $url], 200);
+        $url = Url::with('tags')->find($id);
+
+        if (!$url) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'URL not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 200,
+            'data' => $url
+        ], 200);
     }
 
     /**
@@ -109,7 +132,14 @@ class UrlController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $url = Url::findOrFail($id);
+        $url = Url::find($id);
+
+        if (!$url) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'URL not found'
+            ], 404);
+        }
 
         $request->validate([
             'destination_url' => 'nullable|url',
@@ -123,7 +153,6 @@ class UrlController extends Controller
             'short_link' => 'nullable|string',
         ]);
 
-        // Update URL data
         $url->update($request->only([
             'destination_url',
             'source',
@@ -134,11 +163,6 @@ class UrlController extends Controller
             'referral',
             'short_link',
         ]));
-
-        // If destination URL changes, regenerate QR code
-        if ($request->has('destination_url')) {
-            $url->save();
-        }
 
         // Update tags if any
         if ($request->has('tags') && is_array($request->tags)) {
@@ -151,23 +175,30 @@ class UrlController extends Controller
         }
 
         $url->load('tags');
-        return response()->json(['data' => $url, 'message' => 'URL updated successfully'], 200);
-    }
 
-    /**
-     * Remove the specified resource from storage.
-     */
+        return response()->json([
+            'status' => 200,
+            'data' => $url,
+            'message' => 'URL updated successfully'
+        ], 200);
+    }
     public function destroy($id)
     {
-        $url = Url::findOrFail($id);
-        
-        // Delete QR code file if exists
-        if ($url->qr_code && Storage::exists('public/' . $url->qr_code)) {
-            Storage::delete('public/' . $url->qr_code);
+        $url = Url::find($id);
+    
+        if (!$url) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'URL not found'
+            ], 404);
         }
-        
+    
         $url->delete();
-        return response()->json(['message' => 'URL deleted successfully'], 200);
+    
+        return response()->json([
+            'status' => 200,
+            'message' => 'URL deleted successfully'
+        ], 200);
     }
 
     /**
@@ -275,5 +306,4 @@ class UrlController extends Controller
             ->header('Content-Type', 'image/png')
             ->header('Content-Disposition', 'inline; filename="' . $fileName . '"');
     }
-
-}    
+}

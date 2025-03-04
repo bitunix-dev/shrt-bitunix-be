@@ -8,65 +8,61 @@ use Illuminate\Http\Request;
 
 class TagController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         $tags = Tag::all();
-        return response()->json(['data' => $tags], 200);
+        return response()->json(['status' => 200, 'data' => $tags], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $request->validate([
             'name' => 'required|string|unique:tags,name',
         ]);
 
-        $tag = Tag::create([
-            'name' => $request->name,
-        ]);
+        $tag = Tag::create(['name' => $request->name]);
 
-        return response()->json(['data' => $tag, 'message' => 'Tag created successfully'], 201);
+        return response()->json(['status' => 201, 'data' => $tag, 'message' => 'Tag created successfully'], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show($id)
     {
-        $tag = Tag::findOrFail($id);
-        return response()->json(['data' => $tag], 200);
+        $tag = Tag::find($id);
+
+        if (!$tag) {
+            return response()->json(['status' => 404, 'message' => 'Tag not found'], 404);
+        }
+
+        return response()->json(['status' => 200, 'data' => $tag], 200);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, $id)
     {
-        $tag = Tag::findOrFail($id);
+        $tag = Tag::find($id);
+
+        if (!$tag) {
+            return response()->json(['status' => 404, 'message' => 'Tag not found'], 404);
+        }
 
         $request->validate([
             'name' => 'required|string|unique:tags,name,' . $id,
         ]);
 
-        $tag->update([
-            'name' => $request->name,
-        ]);
+        $tag->update(['name' => $request->name]);
 
-        return response()->json(['data' => $tag, 'message' => 'Tag updated successfully'], 200);
+        return response()->json(['status' => 200, 'data' => $tag, 'message' => 'Tag updated successfully'], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy($id)
     {
-        $tag = Tag::findOrFail($id);
+        $tag = Tag::find($id);
+
+        if (!$tag) {
+            return response()->json(['status' => 404, 'message' => 'Tag not found'], 404);
+        }
+
         $tag->delete();
-        return response()->json(['message' => 'Tag deleted successfully'], 200);
+
+        return response()->json(['status' => 200, 'message' => 'Tag deleted successfully'], 200);
     }
 }
