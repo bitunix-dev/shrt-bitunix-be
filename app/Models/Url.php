@@ -30,4 +30,12 @@ class Url extends Model
     {
         return $this->belongsToMany(Tag::class);
     }
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::addGlobalScope('order', function ($query) {
+            $query->orderBy('created_at', 'desc');
+        });
+    }
 }

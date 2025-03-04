@@ -15,4 +15,12 @@ class Tag extends Model
     {
         return $this->belongsToMany(Url::class);
     }
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::addGlobalScope('order', function ($query) {
+            $query->orderBy('created_at', 'desc');
+        });
+    }
 }
