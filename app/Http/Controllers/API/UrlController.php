@@ -40,12 +40,18 @@ class UrlController extends Controller
         // Generate short link unik
         $shortLink = $this->generateUniqueShortLink();
     
+        // Normalisasi dan Simpan Source
+        $source = $this->normalizeAndStore('App\Models\Source', $request->source);
+    
+        // Normalisasi dan Simpan Medium
+        $medium = $this->normalizeAndStore('App\Models\Medium', $request->medium);
+    
         // Simpan URL ke database
         $url = Url::create([
             'destination_url' => $request->destination_url,
-            'short_link' => "dub.sh/".$shortLink,
-            'source' => $request->source,
-            'medium' => $request->medium,
+            'short_link' => "dub.sh/" . $shortLink,
+            'source_id' => $source?->id, // Pakai ID jika ada
+            'medium_id' => $medium?->id, // Pakai ID jika ada
             'campaign' => $request->campaign,
             'term' => $request->term,
             'content' => $request->content,
@@ -60,7 +66,7 @@ class UrlController extends Controller
         if ($request->has('tags') && is_array($request->tags)) {
             $tagIds = [];
             foreach ($request->tags as $tagName) {
-                $tag = Tag::firstOrCreate(['name' => $tagName]);
+                $tag = $this->normalizeAndStore('App\Models\Tag', $tagName);
                 $tagIds[] = $tag->id;
             }
             $url->tags()->sync($tagIds);
@@ -70,7 +76,15 @@ class UrlController extends Controller
         return response()->json(['data' => $url, 'message' => 'URL created successfully'], 201);
     }
     
-    
+    private function normalizeAndStore($model, $name)
+    {
+        if (!$name) {
+            return null; // Jika kosong, tidak perlu simpan
+        }
+
+        $normalized = strtolower(str_replace(' ', '-', trim($name))); // Huruf kecil & spasi ke dash
+        return $model::firstOrCreate(['name' => $normalized]);
+    }
 
 
     /**

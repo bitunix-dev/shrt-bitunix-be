@@ -28,7 +28,7 @@ jobs:
 
       - name: Copy Environment File
         run: |
-          cp .env.local .env
+          cp .env.staging .env
 
       - name: Install sshpass
         run: sudo apt-get install -y sshpass
