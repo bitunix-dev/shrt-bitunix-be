@@ -1,0 +1,40 @@
+name: Deployment of Shorten Platform Bitunix
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+
+      - name: Install Dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+          composer dump-autoload
+          php artisan config:clear
+
+      - name: Copy Environment File
+        run: |
+          cp .env.local .env
+
+      - name: Install sshpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sshpass -p 'c#)rgPMzNC2998@Vb4.M' rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" ./ root@147.93.30.80:/var/www/shrt-bitunix-be/
+          sshpass -p 'c#)rgPMzNC2998@Vb4.M' ssh -o StrictHostKeyChecking=no root@147.93.30.80 'cd /var/www/shrt-bitunix-be && php artisan key:generate --ansi && php artisan migrate && php artisan optimize:clear && php artisan storage:link && php artisan config:clear'
