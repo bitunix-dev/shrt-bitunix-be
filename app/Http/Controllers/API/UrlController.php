@@ -68,9 +68,6 @@ class UrlController extends Controller
             'content' => $request->content,
             'referral' => $request->referral,
         ]);
-    
-        // Simpan QR Code ke dalam database
-        $url->qr_code = $this->generateQRCode($url);
         $url->save();
     
         // Attach tags ke URL jika ada
@@ -140,8 +137,6 @@ class UrlController extends Controller
 
         // If destination URL changes, regenerate QR code
         if ($request->has('destination_url')) {
-            $qrCodePath = $this->generateQRCode($url);
-            $url->qr_code = $qrCodePath;
             $url->save();
         }
 
