@@ -44,7 +44,7 @@ class UrlController extends Controller
     
         try {
             // Generate short link unik
-            $shortLink = $this->generateUniqueShortLink();
+            $shortLink = $request->short_link ?? $this->generateUniqueShortLink();
     
             // Normalisasi Source dan Medium (disimpan di tabel masing-masing jika belum ada)
             $sourceName = $this->normalize($request->source);
