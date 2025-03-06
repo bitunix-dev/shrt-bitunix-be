@@ -245,11 +245,21 @@ class UrlController extends Controller
             'ref' => $url->referral,
         ])->filter()->toArray();
 
-        $destinationUrl = $url->destination_url;
-        if (!empty($utmParams)) {
-            $separator = (str_contains($destinationUrl, '?') ? '&' : '?');
-            $destinationUrl .= $separator . http_build_query($utmParams);
+        $parsedUrl = parse_url($url->destination_url);
+        $queryParams = [];
+        if (isset($parsedUrl['query'])) {
+            parse_str($parsedUrl['query'], $queryParams); // Ambil parameter yang sudah ada di URL
         }
+
+        // Gabungkan UTM parameters dengan parameter yang sudah ada, tanpa duplikasi
+        $finalParams = array_merge($utmParams, $queryParams);
+
+        // Buat ulang URL tanpa duplikasi parameter
+        $destinationUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'] . $parsedUrl['path'];
+        if (!empty($finalParams)) {
+            $destinationUrl .= '?' . http_build_query($finalParams);
+        }
+
 
         return redirect($destinationUrl);
     }
