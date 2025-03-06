@@ -211,9 +211,6 @@ class UrlController extends Controller
     {
         $url = Url::where('short_link', "short.bitunixads.com/" . $shortLink)->firstOrFail();
 
-        // Increment click count, hindari duplikasi klik berdasarkan IP dalam 1 jam
-        $this->incrementClicks($url);
-
         $ipAddress = $request->ip();
         $cookieName = 'visited_' . $url->id;
 
@@ -233,6 +230,7 @@ class UrlController extends Controller
 
             // Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440); // 1440 = 24 jam
+            $this->incrementClicks($url);
         }
 
         // Redirect ke URL tujuan dengan UTM tracking
