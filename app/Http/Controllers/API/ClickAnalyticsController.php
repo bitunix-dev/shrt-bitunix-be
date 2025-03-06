@@ -232,4 +232,40 @@ class ClickAnalyticsController extends Controller
 
         return response()->json(['status' => 200, 'data' => $contents]);
     }
+    /**
+     * Get total clicks by Device
+     */
+    public function getClicksByDevice(Request $request)
+    {
+        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
+        $endDate = $request->query('end_date', Carbon::now());
+
+        $devices = ClickLog::select('device', DB::raw('COUNT(*) as total_clicks'))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereNotNull('device')
+            ->groupBy('device')
+            ->orderByDesc('total_clicks')
+            ->get();
+
+        return response()->json(['status' => 200, 'data' => $devices]);
+    }
+
+    /**
+     * Get total clicks by Browser
+     */
+    public function getClicksByBrowser(Request $request)
+    {
+        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
+        $endDate = $request->query('end_date', Carbon::now());
+
+        $browsers = ClickLog::select('browser', DB::raw('COUNT(*) as total_clicks'))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereNotNull('browser')
+            ->groupBy('browser')
+            ->orderByDesc('total_clicks')
+            ->get();
+
+        return response()->json(['status' => 200, 'data' => $browsers]);
+    }
+
 }

@@ -26,3 +26,5 @@ Route::get('/analytics/medium', [ClickAnalyticsController::class, 'getClicksByMe
 Route::get('/analytics/campaign', [ClickAnalyticsController::class, 'getClicksByCampaign']);
 Route::get('/analytics/term', [ClickAnalyticsController::class, 'getClicksByTerm']);
 Route::get('/analytics/content', [ClickAnalyticsController::class, 'getClicksByContent']);
+Route::get('/analytics/devices', [ClickAnalyticsController::class, 'getClicksByDevice']);
+Route::get('/analytics/browsers', [ClickAnalyticsController::class, 'getClicksByBrowser']);
