@@ -17,3 +17,12 @@ Route::get('/qr/{id}', [UrlController::class, 'getQrCode']);
 
 Route::get('/analytics/clicks', [ClickAnalyticsController::class, 'getAllClicks']);
 Route::get('/analytics/clicks/{id}', [ClickAnalyticsController::class, 'getClicksByUrl']);
+Route::get('/analytics/countries', [ClickAnalyticsController::class, 'getClicksByCountry']);
+Route::get('/analytics/cities', [ClickAnalyticsController::class, 'getClicksByCity']);
+Route::get('/analytics/regions', [ClickAnalyticsController::class, 'getClicksByRegion']);
+Route::get('/analytics/continents', [ClickAnalyticsController::class, 'getClicksByContinent']);
+Route::get('/analytics/source', [ClickAnalyticsController::class, 'getClicksBySource']);
+Route::get('/analytics/medium', [ClickAnalyticsController::class, 'getClicksByMedium']);
+Route::get('/analytics/campaign', [ClickAnalyticsController::class, 'getClicksByCampaign']);
+Route::get('/analytics/term', [ClickAnalyticsController::class, 'getClicksByTerm']);
+Route::get('/analytics/content', [ClickAnalyticsController::class, 'getClicksByContent']);
