@@ -17,7 +17,12 @@ class ClickLog extends Model
         'region',
         'continent',
         'device',
-        'browser'
+        'browser',
+        'source',
+        'medium',
+        'campaign',
+        'term',
+        'content',
     ];
     
 

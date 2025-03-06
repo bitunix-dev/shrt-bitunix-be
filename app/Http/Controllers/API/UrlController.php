@@ -246,7 +246,12 @@ class UrlController extends Controller
                 'region' => $geoData['state_prov'] ?? null,
                 'continent' => $geoData['continent_name'] ?? null,
                 'device' => $device,
-                'browser' => $browser
+                'browser' => $browser,
+                'source' => $url->source ?? null,
+                'medium' => $url->medium ?? null,
+                'campaign' => $url->campaign ?? null,
+                'term' => $url->term ?? null,
+                'content' => $url->content ?? null,
             ]);
     
             // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
