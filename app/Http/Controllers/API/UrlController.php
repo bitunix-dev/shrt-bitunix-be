@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Storage;
+use Jenssegers\Agent\Agent;
+use Illuminate\Support\Facades\Http;
 
 class UrlController extends Controller
 {
@@ -210,30 +212,49 @@ class UrlController extends Controller
     public function redirect($shortLink, Request $request)
     {
         $url = Url::where('short_link', "short.bitunixads.com/" . $shortLink)->firstOrFail();
-
         $ipAddress = $request->ip();
         $cookieName = 'visited_' . $url->id;
-
+    
         // Cek apakah pengguna sudah klik dalam 24 jam (via database)
         $alreadyClicked = ClickLog::where('url_id', $url->id)
             ->where('ip_address', $ipAddress)
             ->where('created_at', '>=', now()->subHours(24)) // Bisa diubah ke berapa jam
             ->exists();
-
+    
         // Cek apakah cookie sudah ada
         if (!$alreadyClicked && !$request->cookie($cookieName)) {
-            // Tambah log klik
+    
+            // ✅ 1. Ambil Data Geolokasi dari IPGeoLocations API
+            $geoResponse = Http::get("https://api.ipgeolocation.io/ipgeo", [
+                'apiKey' => env('IPGEOLOCATION_API_KEY'), // API Key dari .env
+                'ip' => $ipAddress
+            ]);
+    
+            $geoData = $geoResponse->json();
+    
+            // ✅ 2. Ambil Data Device & Browser
+            $agent = new Agent();
+            $device = $agent->device();
+            $browser = $agent->browser();
+    
+            // ✅ 3. Simpan ke ClickLog
             ClickLog::create([
                 'url_id' => $url->id,
-                'ip_address' => $ipAddress
+                'ip_address' => $ipAddress,
+                'country' => $geoData['country_name'] ?? null,
+                'city' => $geoData['city'] ?? null,
+                'region' => $geoData['state_prov'] ?? null,
+                'continent' => $geoData['continent_name'] ?? null,
+                'device' => $device,
+                'browser' => $browser
             ]);
-
-            // Set cookie agar tidak bisa dihitung lagi dalam 24 jam
-            Cookie::queue($cookieName, true, 1440); // 1440 = 24 jam
+    
+            // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
+            Cookie::queue($cookieName, true, 1440);
             $this->incrementClicks($url);
         }
-
-        // Redirect ke URL tujuan dengan UTM tracking
+    
+        // ✅ 5. Tambahkan UTM Tracking & Redirect
         $utmParams = collect([
             'utm_source' => $url->source,
             'utm_medium' => $url->medium,
@@ -242,23 +263,19 @@ class UrlController extends Controller
             'utm_content' => $url->content,
             'ref' => $url->referral,
         ])->filter()->toArray();
-
+    
         $parsedUrl = parse_url($url->destination_url);
         $queryParams = [];
         if (isset($parsedUrl['query'])) {
-            parse_str($parsedUrl['query'], $queryParams); // Ambil parameter yang sudah ada di URL
+            parse_str($parsedUrl['query'], $queryParams);
         }
-
-        // Gabungkan UTM parameters dengan parameter yang sudah ada, tanpa duplikasi
+    
         $finalParams = array_merge($utmParams, $queryParams);
-
-        // Buat ulang URL tanpa duplikasi parameter
         $destinationUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'] . $parsedUrl['path'];
         if (!empty($finalParams)) {
             $destinationUrl .= '?' . http_build_query($finalParams);
         }
-
-
+    
         return redirect($destinationUrl);
     }
     
