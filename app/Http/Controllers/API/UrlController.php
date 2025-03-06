@@ -46,10 +46,15 @@ class UrlController extends Controller
             // Generate short link unik
             $shortLink = $request->short_link ?? $this->generateUniqueShortLink();
     
-            // Normalisasi Source dan Medium (disimpan di tabel masing-masing jika belum ada)
+            // Normalisasi semua parameter yang bisa mengandung spasi
             $sourceName = $this->normalize($request->source);
             $mediumName = $this->normalize($request->medium);
+            $campaignName = $this->normalize($request->campaign);
+            $termName = $this->normalize($request->term);
+            $contentName = $this->normalize($request->content);
+            $referralName = $this->normalize($request->referral);
     
+            // Simpan source & medium jika belum ada di tabel masing-masing
             if ($sourceName) {
                 Source::firstOrCreate(['name' => $sourceName]);
             }
@@ -58,16 +63,16 @@ class UrlController extends Controller
                 Medium::firstOrCreate(['name' => $mediumName]);
             }
     
-            // Simpan URL ke database (source & medium tetap sebagai string)
+            // Simpan URL ke database dengan nilai yang sudah dinormalisasi
             $url = Url::create([
                 'destination_url' => $request->destination_url,
                 'short_link' => "short.bitunixads.com/" . $shortLink,
                 'source' => $sourceName,
                 'medium' => $mediumName,
-                'campaign' => $request->campaign,
-                'term' => $request->term,
-                'content' => $request->content,
-                'referral' => $request->referral,
+                'campaign' => $campaignName,
+                'term' => $termName,
+                'content' => $contentName,
+                'referral' => $referralName,
             ]);
             $url->save();
     
@@ -98,15 +103,13 @@ class UrlController extends Controller
             ], 500);
         }
     }
-    
     /**
      * Normalisasi string: ubah huruf kecil dan ganti spasi dengan dash (-)
      */
     private function normalize($name)
     {
-        return $name ? strtolower(str_replace(' ', '-', trim($name))) : null;
+        return $name ? strtolower(preg_replace('/\s+/', '-', trim($name))) : null;
     }
-    
 /**
  * Display the specified resource.
  */
