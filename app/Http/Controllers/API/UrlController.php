@@ -228,9 +228,6 @@ class UrlController extends Controller
                 'ip_address' => $ipAddress
             ]);
 
-            // Tambah count klik
-            $url->increment('clicks');
-
             // Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440); // 1440 = 24 jam
         }
