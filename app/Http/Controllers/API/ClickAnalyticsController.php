@@ -88,21 +88,29 @@ class ClickAnalyticsController extends Controller
 
         // Ambil jumlah klik per jam untuk URL tertentu
         $clicksData = ClickLog::select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour"),
-                DB::raw("COUNT(*) as clicks")
-            )
-            ->where('url_id', $id)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->groupBy('hour')
-            ->orderBy('hour', 'ASC')
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'hour' => $item->hour,
-                    'clicks' => $item->clicks,
-                ];
-            });
+            DB::raw("DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour"),
+            DB::raw("COUNT(*) as clicks")
+        )
+        ->where('url_id', $id)
+        ->whereBetween('created_at', [$startDate, $endDate])
+        ->groupBy('hour')
+        ->orderBy('hour', 'ASC')
+        ->get()
+        ->map(function ($item, $index) {
+            return [
+                'id' => $index + 1,
+                'hour' => $item->hour,
+                'clicks' => $item->clicks,
+            ];
+        });
+
+        // ✅ Ambil country_flag dari data klik terbaru untuk URL ini
+        $latestClick = ClickLog::where('url_id', $id)
+            ->whereNotNull('country_flag')
+            ->latest('created_at')
+            ->first();
+
+        $country_flag = $latestClick ? $latestClick->country_flag : null;
 
         return response()->json([
             'status' => 200,
@@ -113,8 +121,10 @@ class ClickAnalyticsController extends Controller
                 'total_clicks' => ClickLog::where('url_id', $id)
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->count(),
+                'country_flag' => $country_flag
             ],
         ]);
+
     }
     public function getClicksByCountry(Request $request) { return $this->getClicksByField($request, 'country'); }
     public function getClicksByCity(Request $request) { return $this->getClicksByField($request, 'city'); }
