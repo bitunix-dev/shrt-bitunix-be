@@ -67,7 +67,8 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     $field => $item[$field], // Pastikan $field ada di dalam array
-                    'total_clicks' => $item['total_clicks']
+                    'total_clicks' => $item['total_clicks'],
+                    'country_flag'=>$item['country_flag']
                 ];
             });
 
