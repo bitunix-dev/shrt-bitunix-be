@@ -11,16 +11,21 @@ use Illuminate\Support\Facades\DB;
 
 class ClickAnalyticsController extends Controller
 {
+    private function addIncrementalId($data)
+    {
+        return $data->map(function ($item, $index) {
+            return array_merge(['id' => $index + 1], $item);
+        });
+    }
+
     /**
      * Get click analytics for all URLs.
      */
     public function getAllClicks(Request $request)
     {
-        // Ambil rentang waktu (default: 24 jam terakhir)
         $startDate = $request->query('start_date', Carbon::now()->subDays(1));
         $endDate = $request->query('end_date', Carbon::now());
 
-        // Ambil jumlah klik per jam
         $clicksData = ClickLog::select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour"),
                 DB::raw("COUNT(*) as clicks")
@@ -33,16 +38,44 @@ class ClickAnalyticsController extends Controller
         return response()->json([
             'status' => 200,
             'data' => [
-                'clicks' => $clicksData,
+                'clicks' => $this->addIncrementalId($clicksData),
                 'total_clicks' => ClickLog::whereBetween('created_at', [$startDate, $endDate])->count(),
             ],
         ]);
+    }
+    private function getClicksByField(Request $request, string $field)
+    {
+        if (empty($field)) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Field parameter is required'
+            ], 400);
+        }
+
+        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
+        $endDate = $request->query('end_date', Carbon::now());
+
+        $data = ClickLog::select($field, DB::raw('COUNT(*) as total_clicks'))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereNotNull($field)
+            ->groupBy($field)
+            ->orderByDesc('total_clicks')
+            ->get()
+            ->map(function ($item, $index) use ($field) {
+                return [
+                    'id' => $index + 1,
+                    $field => $item[$field], // Pastikan $field ada di dalam array
+                    'total_clicks' => $item['total_clicks']
+                ];
+            });
+
+        return response()->json(['status' => 200, 'data' => $data]);
     }
 
     /**
      * Get click analytics for a specific short link.
      */
-    public function getClicksByUrl($id, Request $request)
+    public function getClicksByUrl(Request $request, $id)
     {
         // Cek apakah URL ada
         $url = Url::with('tags')->findOrFail($id);
@@ -60,7 +93,14 @@ class ClickAnalyticsController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('hour')
             ->orderBy('hour', 'ASC')
-            ->get();
+            ->get()
+            ->map(function ($item, $index) {
+                return [
+                    'id' => $index + 1,
+                    'hour' => $item->hour,
+                    'clicks' => $item->clicks,
+                ];
+            });
 
         return response()->json([
             'status' => 200,
@@ -74,198 +114,16 @@ class ClickAnalyticsController extends Controller
             ],
         ]);
     }
-    public function getClicksByCountry(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $countries = ClickLog::select('country', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('country')
-            ->groupBy('country')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $countries]);
-    }
-
-    /**
-     * Get total clicks by City
-     */
-    public function getClicksByCity(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('city')
-            ->groupBy('city')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $cities]);
-    }
-
-    /**
-     * Get total clicks by Region
-     */
-    public function getClicksByRegion(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('region')
-            ->groupBy('region')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $regions]);
-    }
-
-    /**
-     * Get total clicks by Continent
-     */
-    public function getClicksByContinent(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('continent')
-            ->groupBy('continent')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $continents]);
-    }
-
-    /**
-     * Get total clicks by Source
-     */
-    public function getClicksBySource(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $sources = ClickLog::select('source', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('source')
-            ->groupBy('source')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $sources]);
-    }
-
-    /**
-     * Get total clicks by Medium
-     */
-    public function getClicksByMedium(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $mediums = ClickLog::select('medium', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('medium')
-            ->groupBy('medium')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $mediums]);
-    }
-
-    /**
-     * Get total clicks by Campaign
-     */
-    public function getClicksByCampaign(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $campaigns = ClickLog::select('campaign', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('campaign')
-            ->groupBy('campaign')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $campaigns]);
-    }
-
-    /**
-     * Get total clicks by Term
-     */
-    public function getClicksByTerm(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $terms = ClickLog::select('term', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('term')
-            ->groupBy('term')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $terms]);
-    }
-
-    /**
-     * Get total clicks by Content
-     */
-    public function getClicksByContent(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $contents = ClickLog::select('content', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('content')
-            ->groupBy('content')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $contents]);
-    }
-    /**
-     * Get total clicks by Device
-     */
-    public function getClicksByDevice(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $devices = ClickLog::select('device', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('device')
-            ->groupBy('device')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $devices]);
-    }
-
-    /**
-     * Get total clicks by Browser
-     */
-    public function getClicksByBrowser(Request $request)
-    {
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
-        $endDate = $request->query('end_date', Carbon::now());
-
-        $browsers = ClickLog::select('browser', DB::raw('COUNT(*) as total_clicks'))
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->whereNotNull('browser')
-            ->groupBy('browser')
-            ->orderByDesc('total_clicks')
-            ->get();
-
-        return response()->json(['status' => 200, 'data' => $browsers]);
-    }
+    public function getClicksByCountry(Request $request) { return $this->getClicksByField($request, 'country'); }
+    public function getClicksByCity(Request $request) { return $this->getClicksByField($request, 'city'); }
+    public function getClicksByRegion(Request $request) { return $this->getClicksByField($request, 'region'); }
+    public function getClicksByContinent(Request $request) { return $this->getClicksByField($request, 'continent'); }
+    public function getClicksBySource(Request $request) { return $this->getClicksByField($request, 'source'); }
+    public function getClicksByMedium(Request $request) { return $this->getClicksByField($request, 'medium'); }
+    public function getClicksByCampaign(Request $request) { return $this->getClicksByField($request, 'campaign'); }
+    public function getClicksByTerm(Request $request) { return $this->getClicksByField($request, 'term'); }
+    public function getClicksByContent(Request $request) { return $this->getClicksByField($request, 'content'); }
+    public function getClicksByDevice(Request $request) { return $this->getClicksByField($request, 'device'); }
+    public function getClicksByBrowser(Request $request) { return $this->getClicksByField($request, 'browser'); }
 
 }
