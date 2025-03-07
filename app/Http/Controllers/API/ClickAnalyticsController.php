@@ -57,7 +57,12 @@ class ClickAnalyticsController extends Controller
         $startDate = $request->query('start_date', Carbon::now()->subDays(1));
         $endDate = $request->query('end_date', Carbon::now());
 
-        $data = ClickLog::select($field, DB::raw('COUNT(*) as total_clicks'))
+        $data = ClickLog::select(
+                $field,
+                DB::raw('COUNT(*) as total_clicks'),
+                DB::raw('(SELECT country_flag FROM click_logs WHERE click_logs.' . $field . ' = outer_table.' . $field . ' AND country_flag IS NOT NULL ORDER BY created_at DESC LIMIT 1) as country_flag')
+            )
+            ->from('click_logs as outer_table') // Alias untuk subquery
             ->whereBetween('created_at', [$startDate, $endDate])
             ->whereNotNull($field)
             ->groupBy($field)
@@ -66,14 +71,15 @@ class ClickAnalyticsController extends Controller
             ->map(function ($item, $index) use ($field) {
                 return [
                     'id' => $index + 1,
-                    $field => $item[$field], // Pastikan $field ada di dalam array
+                    $field => $item[$field],
                     'total_clicks' => $item['total_clicks'],
-                    'country_flag'=>$item['country_flag']
+                    'country_flag' => $item['country_flag'] ?? null // Pastikan tidak NULL jika ada data
                 ];
             });
 
         return response()->json(['status' => 200, 'data' => $data]);
     }
+
 
     /**
      * Get click analytics for a specific short link.
