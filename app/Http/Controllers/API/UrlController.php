@@ -27,7 +27,7 @@ class UrlController extends Controller
             'data' => $urls
         ], 200);
     }
-    
+
     /**
      * Store a newly created resource in storage.
      */
@@ -43,11 +43,11 @@ class UrlController extends Controller
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
         ]);
-    
+
         try {
             // Generate short link unik
             $shortLink = $request->short_link ?? $this->generateUniqueShortLink();
-    
+
             // Normalisasi semua parameter yang bisa mengandung spasi
             $sourceName = $this->normalize($request->source);
             $mediumName = $this->normalize($request->medium);
@@ -55,16 +55,16 @@ class UrlController extends Controller
             $termName = $this->normalize($request->term);
             $contentName = $this->normalize($request->content);
             $referralName = $this->normalize($request->referral);
-    
+
             // Simpan source & medium jika belum ada di tabel masing-masing
             if ($sourceName) {
                 Source::firstOrCreate(['name' => $sourceName]);
             }
-    
+
             if ($mediumName) {
                 Medium::firstOrCreate(['name' => $mediumName]);
             }
-    
+
             // Simpan URL ke database dengan nilai yang sudah dinormalisasi
             $url = Url::create([
                 'destination_url' => $request->destination_url,
@@ -77,7 +77,7 @@ class UrlController extends Controller
                 'referral' => $referralName,
             ]);
             $url->save();
-    
+
             // Attach tags ke URL jika ada
             if ($request->has('tags') && is_array($request->tags)) {
                 $tagIds = [];
@@ -88,15 +88,15 @@ class UrlController extends Controller
                 }
                 $url->tags()->sync($tagIds);
             }
-    
+
             $url->load('tags');
-    
+
             return response()->json([
                 'status' => 201,
                 'data' => $url,
                 'message' => 'URL created successfully'
             ], 201);
-    
+
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 500,
@@ -190,16 +190,16 @@ class UrlController extends Controller
     public function destroy($id)
     {
         $url = Url::find($id);
-    
+
         if (!$url) {
             return response()->json([
                 'status' => 404,
                 'message' => 'URL not found'
             ], 404);
         }
-    
+
         $url->delete();
-    
+
         return response()->json([
             'status' => 200,
             'message' => 'URL deleted successfully'
@@ -214,34 +214,35 @@ class UrlController extends Controller
         $url = Url::where('short_link', "short.bitunixads.com/" . $shortLink)->firstOrFail();
         $ipAddress = $request->ip();
         $cookieName = 'visited_' . $url->id;
-    
+
         // Cek apakah pengguna sudah klik dalam 24 jam (via database)
         $alreadyClicked = ClickLog::where('url_id', $url->id)
             ->where('ip_address', $ipAddress)
             ->where('created_at', '>=', now()->subHours(24)) // Bisa diubah ke berapa jam
             ->exists();
-    
+
         // Cek apakah cookie sudah ada
         if (!$alreadyClicked && !$request->cookie($cookieName)) {
-    
+
             // ✅ 1. Ambil Data Geolokasi dari IPGeoLocations API
             $geoResponse = Http::get("https://api.ipgeolocation.io/ipgeo", [
                 'apiKey' => env('IPGEOLOCATION_API_KEY'), // API Key dari .env
                 'ip' => $ipAddress
             ]);
-    
+
             $geoData = $geoResponse->json();
-    
+
             // ✅ 2. Ambil Data Device & Browser
             $agent = new Agent();
             $device = $agent->device();
             $browser = $agent->browser();
-    
+
             // ✅ 3. Simpan ke ClickLog
             ClickLog::create([
                 'url_id' => $url->id,
                 'ip_address' => $ipAddress,
                 'country' => $geoData['country_name'] ?? null,
+                'country_flag' => $geoData['country_flag'] ?? null,
                 'city' => $geoData['city'] ?? null,
                 'region' => $geoData['state_prov'] ?? null,
                 'continent' => $geoData['continent_name'] ?? null,
@@ -253,12 +254,12 @@ class UrlController extends Controller
                 'term' => $url->term ?? null,
                 'content' => $url->content ?? null,
             ]);
-    
+
             // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440);
             $this->incrementClicks($url);
         }
-    
+
         // ✅ 5. Tambahkan UTM Tracking & Redirect
         $utmParams = collect([
             'utm_source' => $url->source,
@@ -268,22 +269,22 @@ class UrlController extends Controller
             'utm_content' => $url->content,
             'ref' => $url->referral,
         ])->filter()->toArray();
-    
+
         $parsedUrl = parse_url($url->destination_url);
         $queryParams = [];
         if (isset($parsedUrl['query'])) {
             parse_str($parsedUrl['query'], $queryParams);
         }
-    
+
         $finalParams = array_merge($utmParams, $queryParams);
         $destinationUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'] . $parsedUrl['path'];
         if (!empty($finalParams)) {
             $destinationUrl .= '?' . http_build_query($finalParams);
         }
-    
+
         return redirect($destinationUrl);
     }
-    
+
 
     /**
      * Generate a unique short link.
@@ -293,7 +294,7 @@ class UrlController extends Controller
         do {
             $shortLink = Str::random($length);
         } while (Url::where('short_link', $shortLink)->exists());
-        
+
         return $shortLink;
     }
 
@@ -303,7 +304,7 @@ class UrlController extends Controller
     private function generateQRCode(Url $url)
     {
         $redirectUrl = url("/r/{$url->short_link}");
-    
+
         // Generate QR Code sebagai Base64 (PNG tanpa Imagick)
         return base64_encode(QrCode::format('png')->size(300)->errorCorrection('H')->generate($redirectUrl));
     }

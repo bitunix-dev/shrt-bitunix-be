@@ -13,6 +13,7 @@ class ClickLog extends Model
         'url_id',
         'ip_address',
         'country',
+        'country_flag',
         'city',
         'region',
         'continent',
@@ -24,7 +25,7 @@ class ClickLog extends Model
         'term',
         'content',
     ];
-    
+
 
     public $timestamps = false;
 }
