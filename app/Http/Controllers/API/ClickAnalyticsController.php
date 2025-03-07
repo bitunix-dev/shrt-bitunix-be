@@ -23,9 +23,11 @@ class ClickAnalyticsController extends Controller
      */
     public function getAllClicks(Request $request)
     {
+        // Ambil rentang waktu (default: 24 jam terakhir)
         $startDate = $request->query('start_date', Carbon::now()->subDays(1));
         $endDate = $request->query('end_date', Carbon::now());
 
+        // Ambil jumlah klik per jam
         $clicksData = ClickLog::select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour"),
                 DB::raw("COUNT(*) as clicks")
@@ -38,7 +40,7 @@ class ClickAnalyticsController extends Controller
         return response()->json([
             'status' => 200,
             'data' => [
-                'clicks' => $this->addIncrementalId($clicksData),
+                'clicks' => $clicksData,
                 'total_clicks' => ClickLog::whereBetween('created_at', [$startDate, $endDate])->count(),
             ],
         ]);
