@@ -12,10 +12,10 @@ Route::get('/redirect/{shortLink}', [UrlController::class, 'redirect']);
 Route::get('/qr/{id}', [UrlController::class, 'getQrCode']);
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
-Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::middleware('auth:sanctum')->put('update-name', [AuthController::class, 'updateName']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('logout', [AuthController::class, 'logout']);
     Route::apiResource('urls', UrlController::class);
     Route::apiResource('sources', SourceController::class);
     Route::apiResource('mediums', MediumController::class);
