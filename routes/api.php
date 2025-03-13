@@ -6,7 +6,7 @@ use App\Http\Controllers\API\MediumController;
 use App\Http\Controllers\API\TagController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ClickAnalyticsController;
-
+use App\Http\Controllers\API\AuthController;
 
 Route::apiResource('urls', UrlController::class);
 Route::get('/redirect/{shortLink}', [UrlController::class, 'redirect']);
@@ -28,3 +28,7 @@ Route::get('/analytics/term', [ClickAnalyticsController::class, 'getClicksByTerm
 Route::get('/analytics/content', [ClickAnalyticsController::class, 'getClicksByContent']);
 Route::get('/analytics/devices', [ClickAnalyticsController::class, 'getClicksByDevice']);
 Route::get('/analytics/browsers', [ClickAnalyticsController::class, 'getClicksByBrowser']);
+
+Route::post('register', [AuthController::class, 'register']);
+Route::post('login', [AuthController::class, 'login']);
+Route::middleware('auth:sanctum')->put('update-name', [AuthController::class, 'updateName']);

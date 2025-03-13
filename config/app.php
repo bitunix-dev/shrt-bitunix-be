@@ -186,6 +186,7 @@ return [
     'aliases' => Facade::defaultAliases()->merge([
         // 'Example' => App\Facades\Example::class,
         'Agent' => Jenssegers\Agent\Facades\Agent::class,
+        'Avatar'    => Laravolt\Avatar\Facade::class,
     ])->toArray(),
 
 ];
