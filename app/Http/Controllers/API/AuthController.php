@@ -117,5 +117,16 @@ public function register(Request $request)
 
         return $avatarUrl; // Kembalikan URL avatar yang telah disimpan di Cloudinary
     }
+    public function logout(Request $request)
+    {
+        // Mengambil token API yang digunakan oleh user
+        $request->user()->tokens->each(function($token) {
+            $token->delete(); // Menghapus token API yang digunakan oleh user
+        });
 
+        return response()->json([
+            'status' => 200,
+            'message' => 'User logged out successfully!'
+        ], 200);
+    }
 }
