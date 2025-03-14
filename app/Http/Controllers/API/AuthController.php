@@ -27,7 +27,15 @@ public function register(Request $request)
     ]);
 
     // Ambil bagian nama sebelum "@" dari email
-    $name = explode('@', $request->email)[0];
+    $username = explode('@', $request->email)[0];
+
+    // Ganti underscore dan titik dengan spasi
+    $username = str_replace(['_', '.'], ' ', $username);
+
+    // Capitalize the first letter of each word
+    $name = ucwords($username);
+
+    // Simpan avatar
     $avatarPath = $this->saveAvatar($name); // Panggil fungsi untuk membuat dan menyimpan avatar ke Cloudinary
 
     $user = User::create([
@@ -42,6 +50,7 @@ public function register(Request $request)
         'data' => $user,
         'message' => 'User registered successfully!'
     ], 201);
+
 }
 
 // Login
