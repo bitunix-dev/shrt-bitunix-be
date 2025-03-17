@@ -21,7 +21,7 @@ class UrlController extends Controller
 {
     public function index()
     {
-        $urls = Url::with('tags')->get();
+        $urls = Url::with('tags')->paginate(10);
         return response()->json([
             'status' => 200,
             'data' => $urls
