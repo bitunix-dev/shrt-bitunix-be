@@ -35,7 +35,7 @@ class ClickAnalyticsController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('hour')
             ->orderBy('hour', 'ASC')
-            ->paginate();
+            ->get();
 
         return response()->json([
             'status' => 200,
