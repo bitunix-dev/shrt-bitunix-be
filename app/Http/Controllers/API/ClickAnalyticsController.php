@@ -35,7 +35,7 @@ class ClickAnalyticsController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('hour')
             ->orderBy('hour', 'ASC')
-            ->get();
+            ->paginate();
 
         return response()->json([
             'status' => 200,
@@ -67,7 +67,7 @@ class ClickAnalyticsController extends Controller
             ->whereNotNull($field)
             ->groupBy($field)
             ->orderByDesc('total_clicks')
-            ->get()
+            ->paginate()
             ->map(function ($item, $index) use ($field) {
                 return [
                     'id' => $index + 1,
@@ -102,7 +102,7 @@ class ClickAnalyticsController extends Controller
         ->whereBetween('created_at', [$startDate, $endDate])
         ->groupBy('hour')
         ->orderBy('hour', 'ASC')
-        ->get()
+        ->paginate()
         ->map(function ($item, $index) {
             return [
                 'id' => $index + 1,
