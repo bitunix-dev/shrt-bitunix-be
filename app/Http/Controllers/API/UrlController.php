@@ -19,14 +19,28 @@ use Illuminate\Support\Facades\Http;
 
 class UrlController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $urls = Url::with('tags')->paginate(10);
+        // Ambil parameter 'p' dari query string, jika tidak ada, default 10
+        $perPage = $request->input('p', 10);
+
+        // Validasi apakah 'p' adalah angka dan lebih besar dari 0
+        if (!is_numeric($perPage) || $perPage <= 0) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Parameter p harus berupa angka positif.'
+            ], 400);
+        }
+
+        // Ambil data dengan pagination sesuai nilai perPage
+        $urls = Url::with('tags')->paginate($perPage);
+
         return response()->json([
             'status' => 200,
             'data' => $urls
         ], 200);
     }
+
 
     /**
      * Store a newly created resource in storage.
