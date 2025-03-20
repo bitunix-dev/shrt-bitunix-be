@@ -21,6 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('mediums', MediumController::class);
     Route::apiResource('tags', TagController::class);
     Route::get('/analytics/clicks', [ClickAnalyticsController::class, 'getAllClicks']);
+    Route::get('/analytics/urls', [ClickAnalyticsController::class, 'getUrls']);
     Route::get('/analytics/clicks/{id}', [ClickAnalyticsController::class, 'getClicksByUrl']);
     Route::get('/analytics/countries', [ClickAnalyticsController::class, 'getClicksByCountry']);
     Route::get('/analytics/cities', [ClickAnalyticsController::class, 'getClicksByCity']);

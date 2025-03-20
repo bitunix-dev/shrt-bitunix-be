@@ -45,6 +45,16 @@ class ClickAnalyticsController extends Controller
             ],
         ]);
     }
+    public function getUrls(Request $request)
+    {
+        $perPage = $request->input('p', 10);
+        $urls = Url::orderBy('clicks', 'DESC')->with('tags')->paginate($perPage);
+
+        return response()->json([
+            'status' => 200,
+            'data' => $urls
+        ]);
+    }
     private function getClicksByField(Request $request, string $field)
     {
         if (empty($field)) {
