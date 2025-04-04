@@ -252,22 +252,26 @@ class UrlController extends Controller
             $browser = $agent->browser();
 
             // ✅ 3. Simpan ke ClickLog
-            ClickLog::create([
-                'url_id' => $url->id,
-                'ip_address' => $ipAddress,
-                'country' => $geoData['country_name'] ?? null,
-                'country_flag' => $geoData['country_flag'] ?? null,
-                'city' => $geoData['city'] ?? null,
-                'region' => $geoData['state_prov'] ?? null,
-                'continent' => $geoData['continent_name'] ?? null,
-                'device' => $device,
-                'browser' => $browser,
-                'source' => $url->source ?? null,
-                'medium' => $url->medium ?? null,
-                'campaign' => $url->campaign ?? null,
-                'term' => $url->term ?? null,
-                'content' => $url->content ?? null,
-            ]);
+            ClickLog::firstOrCreate(
+                [
+                    'url_id' => $url->id,
+                    'ip_address' => $ipAddress,
+                ],
+                [
+                    'country' => $geoData['country_name'] ?? null,
+                    'country_flag' => $geoData['country_flag'] ?? null,
+                    'city' => $geoData['city'] ?? null,
+                    'region' => $geoData['state_prov'] ?? null,
+                    'continent' => $geoData['continent_name'] ?? null,
+                    'device' => $device,
+                    'browser' => $browser,
+                    'source' => $url->source ?? null,
+                    'medium' => $url->medium ?? null,
+                    'campaign' => $url->campaign ?? null,
+                    'term' => $url->term ?? null,
+                    'content' => $url->content ?? null,
+                ]
+            );
 
             // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440);
