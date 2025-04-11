@@ -34,5 +34,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/analytics/content', [ClickAnalyticsController::class, 'getClicksByContent']);
     Route::get('/analytics/devices', [ClickAnalyticsController::class, 'getClicksByDevice']);
     Route::get('/analytics/browsers', [ClickAnalyticsController::class, 'getClicksByBrowser']);
+    Route::get('/analytics/short-link/{shortLink}', [ClickAnalyticsController::class, 'getClicksByShortLink'])->where('shortLink', '.*');
     Route::put('update-name', [AuthController::class, 'updateName']);
 });
