@@ -220,10 +220,10 @@ class ClickAnalyticsController extends Controller
             });
 
         // Get city statistics
-        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'))
+        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
             ->where('url_id', $url->id)
             ->whereNotNull('city')
-            ->groupBy('city')
+            ->groupBy('city', 'country_flag')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
@@ -237,10 +237,10 @@ class ClickAnalyticsController extends Controller
             });
 
         // Get region statistics
-        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'))
+        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
             ->where('url_id', $url->id)
             ->whereNotNull('region')
-            ->groupBy('region')
+            ->groupBy('region', 'country_flag')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
@@ -254,10 +254,10 @@ class ClickAnalyticsController extends Controller
             });
 
         // Get continent statistics
-        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'))
+        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
             ->where('url_id', $url->id)
             ->whereNotNull('continent')
-            ->groupBy('continent')
+            ->groupBy('continent', 'country_flag')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
