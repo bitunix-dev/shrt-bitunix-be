@@ -231,7 +231,8 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'city' => $item->city,
-                    'total_clicks' => $item->total_clicks
+                    'total_clicks' => $item->total_clicks,
+                    'country_flag' => $item->country_flag
                 ];
             });
 
@@ -247,7 +248,8 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'region' => $item->region,
-                    'total_clicks' => $item->total_clicks
+                    'total_clicks' => $item->total_clicks,
+                    'country_flag' => $item->country_flag
                 ];
             });
 
@@ -263,7 +265,8 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'continent' => $item->continent,
-                    'total_clicks' => $item->total_clicks
+                    'total_clicks' => $item->total_clicks,
+                    'country_flag' => $item->country_flag
                 ];
             });
 
