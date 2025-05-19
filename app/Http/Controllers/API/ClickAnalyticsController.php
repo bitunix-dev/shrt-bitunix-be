@@ -45,6 +45,7 @@ class ClickAnalyticsController extends Controller
             ],
         ]);
     }
+
     public function getUrls(Request $request)
     {
         $perPage = $request->input('p', 10);
@@ -55,6 +56,8 @@ class ClickAnalyticsController extends Controller
             'data' => $urls
         ]);
     }
+
+    // Method yang diperbaiki
     private function getClicksByField(Request $request, string $field)
     {
         if (empty($field)) {
@@ -64,32 +67,46 @@ class ClickAnalyticsController extends Controller
             ], 400);
         }
 
-        $startDate = $request->query('start_date', Carbon::now()->subDays(1));
+        $startDate = $request->query('start_date', Carbon::now()->subDays(30)); // Ubah ke 30 hari
         $endDate = $request->query('end_date', Carbon::now());
 
-        $data = ClickLog::select(
+        // Query yang lebih sederhana tanpa subquery kompleks
+        $query = ClickLog::select(
                 $field,
                 DB::raw('COUNT(*) as total_clicks'),
-                DB::raw('(SELECT country_flag FROM click_logs WHERE click_logs.' . $field . ' = outer_table.' . $field . ' AND country_flag IS NOT NULL ORDER BY created_at DESC LIMIT 1) as country_flag')
+                DB::raw('MAX(country_flag) as country_flag') // Ambil country_flag terbaru
             )
-            ->from('click_logs as outer_table') // Alias untuk subquery
             ->whereBetween('created_at', [$startDate, $endDate])
             ->whereNotNull($field)
+            ->where($field, '!=', '') // Pastikan field tidak kosong
             ->groupBy($field)
-            ->orderByDesc('total_clicks')
-            ->paginate(10)
-            ->map(function ($item, $index) use ($field) {
-                return [
-                    'id' => $index + 1,
-                    $field => $item[$field],
-                    'total_clicks' => $item['total_clicks'],
-                    'country_flag' => $item['country_flag'] ?? null // Pastikan tidak NULL jika ada data
-                ];
-            });
+            ->orderByDesc('total_clicks');
 
-        return response()->json(['status' => 200, 'data' => $data]);
+        // Debug: Log query untuk debugging
+        \Log::info("Analytics Query for {$field}: " . $query->toSql());
+        \Log::info("Analytics Bindings: " . json_encode($query->getBindings()));
+
+        // Ambil data dengan pagination
+        $paginatedData = $query->paginate(10);
+
+        // Transform data untuk menambahkan id incremental
+        $transformedData = $paginatedData->getCollection()->map(function ($item, $index) use ($field) {
+            return [
+                'id' => $index + 1,
+                $field => $item->$field,
+                'total_clicks' => $item->total_clicks,
+                'country_flag' => $item->country_flag ?? null
+            ];
+        });
+
+        // Update collection dengan data yang sudah di-transform
+        $paginatedData->setCollection($transformedData);
+
+        return response()->json([
+            'status' => 200,
+            'data' => $paginatedData
+        ]);
     }
-
 
     /**
      * Get click analytics for a specific short link.
@@ -141,9 +158,9 @@ class ClickAnalyticsController extends Controller
                 'country_flag' => $country_flag
             ],
         ]);
-
     }
-        /**
+
+    /**
      * Get detailed click analytics for a specific short link by its URL.
      */
     public function getClicksByShortLink(Request $request, $shortLink)
@@ -406,6 +423,8 @@ class ClickAnalyticsController extends Controller
             ],
         ]);
     }
+
+    // Methods untuk setiap field
     public function getClicksByCountry(Request $request) { return $this->getClicksByField($request, 'country'); }
     public function getClicksByCity(Request $request) { return $this->getClicksByField($request, 'city'); }
     public function getClicksByRegion(Request $request) { return $this->getClicksByField($request, 'region'); }
@@ -417,5 +436,4 @@ class ClickAnalyticsController extends Controller
     public function getClicksByContent(Request $request) { return $this->getClicksByField($request, 'content'); }
     public function getClicksByDevice(Request $request) { return $this->getClicksByField($request, 'device'); }
     public function getClicksByBrowser(Request $request) { return $this->getClicksByField($request, 'browser'); }
-
 }
