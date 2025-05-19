@@ -77,7 +77,7 @@ class ClickAnalyticsController extends Controller
             ->whereNotNull($field)
             ->groupBy($field)
             ->orderByDesc('total_clicks')
-            ->paginate()
+            ->paginate(10)
             ->map(function ($item, $index) use ($field) {
                 return [
                     'id' => $index + 1,
@@ -112,7 +112,7 @@ class ClickAnalyticsController extends Controller
         ->whereBetween('created_at', [$startDate, $endDate])
         ->groupBy('hour')
         ->orderBy('hour', 'ASC')
-        ->paginate()
+        ->paginate(10)
         ->map(function ($item, $index) {
             return [
                 'id' => $index + 1,
@@ -143,7 +143,7 @@ class ClickAnalyticsController extends Controller
         ]);
 
     }
-    /**
+        /**
      * Get detailed click analytics for a specific short link by its URL.
      */
     public function getClicksByShortLink(Request $request, $shortLink)
@@ -220,10 +220,10 @@ class ClickAnalyticsController extends Controller
             });
 
         // Get city statistics
-        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
+        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'))
             ->where('url_id', $url->id)
             ->whereNotNull('city')
-            ->groupBy('city', 'country_flag')
+            ->groupBy('city')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
@@ -231,16 +231,15 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'city' => $item->city,
-                    'total_clicks' => $item->total_clicks,
-                    'country_flag' => $item->country_flag
+                    'total_clicks' => $item->total_clicks
                 ];
             });
 
         // Get region statistics
-        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
+        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'))
             ->where('url_id', $url->id)
             ->whereNotNull('region')
-            ->groupBy('region', 'country_flag')
+            ->groupBy('region')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
@@ -248,16 +247,15 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'region' => $item->region,
-                    'total_clicks' => $item->total_clicks,
-                    'country_flag' => $item->country_flag
+                    'total_clicks' => $item->total_clicks
                 ];
             });
 
         // Get continent statistics
-        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
+        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'))
             ->where('url_id', $url->id)
             ->whereNotNull('continent')
-            ->groupBy('continent', 'country_flag')
+            ->groupBy('continent')
             ->orderByDesc('total_clicks')
             ->limit(10)
             ->get()
@@ -265,8 +263,7 @@ class ClickAnalyticsController extends Controller
                 return [
                     'id' => $index + 1,
                     'continent' => $item->continent,
-                    'total_clicks' => $item->total_clicks,
-                    'country_flag' => $item->country_flag
+                    'total_clicks' => $item->total_clicks
                 ];
             });
 

@@ -119,9 +119,6 @@ class UrlController extends Controller
             ], 500);
         }
     }
-    /**
-     * Normalisasi string: ubah huruf kecil dan ganti spasi dengan dash (-)
-     */
     private function normalize($name)
     {
         return $name ? strtolower(preg_replace('/\s+/', '-', trim($name))) : null;
@@ -225,7 +222,15 @@ class UrlController extends Controller
      */
     public function redirect($shortLink, Request $request)
     {
-        $url = Url::where('short_link', "short.bitunixads.com/" . $shortLink)->firstOrFail();
+        // Hapus bagian domain (short.bitunixads.com/) dari shortLink
+        $shortLink = str_replace('short.bitunixads.com/', '', $shortLink);
+        \Log::info('Redirecting shortLink: ' . $shortLink);
+
+        // Cari URL berdasarkan shortLink saja tanpa domain
+        $url = Url::where('short_link', 'short.bitunixads.com/' . $shortLink)->firstOrFail();
+        if (!$url) {
+            return response()->json(['error' => 'Not Found'], 404);
+        }
         $ipAddress = $request->ip();
         $cookieName = 'visited_' . $url->id;
 
@@ -272,6 +277,7 @@ class UrlController extends Controller
                     'content' => $url->content ?? null,
                 ]
             );
+
 
             // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440);
