@@ -4,6 +4,7 @@ use App\Http\Controllers\API\UrlController;
 use App\Http\Controllers\API\SourceController;
 use App\Http\Controllers\API\MediumController;
 use App\Http\Controllers\API\TagController;
+use App\Http\Controllers\API\VipCodeController; // Import VipCodeController
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ClickAnalyticsController;
 use App\Http\Controllers\API\AuthController;
@@ -20,6 +21,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('sources', SourceController::class);
     Route::apiResource('mediums', MediumController::class);
     Route::apiResource('tags', TagController::class);
+    Route::apiResource('vip-codes', VipCodeController::class); // Tambah route VipCode
+
     Route::get('/analytics/clicks', [ClickAnalyticsController::class, 'getAllClicks']);
     Route::get('/analytics/urls', [ClickAnalyticsController::class, 'getUrls']);
     Route::get('/analytics/clicks/{id}', [ClickAnalyticsController::class, 'getClicksByUrl']);

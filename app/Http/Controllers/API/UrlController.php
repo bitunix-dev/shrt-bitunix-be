@@ -10,6 +10,7 @@ use App\Models\Url;
 use App\Models\Tag;
 use App\Models\Source;
 use App\Models\Medium;
+use App\Models\VipCode; // Import VipCode model
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -68,6 +69,7 @@ class UrlController extends Controller
             'term' => 'nullable|string',
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
+            'vipCode' => 'nullable|string', // Tambah validasi vipCode
         ]);
 
         try {
@@ -80,7 +82,22 @@ class UrlController extends Controller
             $campaignName = $this->normalize($request->campaign);
             $termName = $this->normalize($request->term);
             $contentName = $this->normalize($request->content);
-            $referralName = $this->normalize($request->referral);
+
+            // Handle vipCode - simpan ke referral field
+            $referralName = null;
+            if ($request->vipCode) {
+                $vipCodeName = $this->normalize($request->vipCode);
+                $referralName = $vipCodeName;
+
+                // Simpan vipCode ke tabel vip_codes jika belum ada
+                VipCode::firstOrCreate(
+                    ['partner_code' => $vipCodeName],
+                    ['partner_name' => $vipCodeName] // Default partner_name sama dengan partner_code
+                );
+            } elseif ($request->referral) {
+                // Jika tidak ada vipCode tapi ada referral, gunakan referral
+                $referralName = $this->normalize($request->referral);
+            }
 
             // Simpan source & medium jika belum ada di tabel masing-masing
             if ($sourceName) {
@@ -100,7 +117,7 @@ class UrlController extends Controller
                 'campaign' => $campaignName,
                 'term' => $termName,
                 'content' => $contentName,
-                'referral' => $referralName,
+                'referral' => $referralName, // Simpan vipCode ke referral field
             ]);
             $url->save();
 
@@ -199,6 +216,7 @@ class UrlController extends Controller
             'term' => 'nullable|string',
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
+            'vipCode' => 'nullable|string', // Tambah validasi vipCode
             'short_link' => 'nullable|string',
         ]);
 
@@ -209,13 +227,30 @@ class UrlController extends Controller
             'campaign',
             'term',
             'content',
-            'referral',
             'short_link',
         ]);
 
         // Map source jika ada
         if ($request->has('source')) {
             $updateData['source'] = $this->mapSource($request->source);
+        }
+
+        // Handle vipCode untuk update
+        if ($request->has('vipCode')) {
+            if ($request->vipCode) {
+                $vipCodeName = $this->normalize($request->vipCode);
+                $updateData['referral'] = $vipCodeName;
+
+                // Simpan vipCode ke tabel vip_codes jika belum ada
+                VipCode::firstOrCreate(
+                    ['partner_code' => $vipCodeName],
+                    ['partner_name' => $vipCodeName]
+                );
+            } else {
+                $updateData['referral'] = null;
+            }
+        } elseif ($request->has('referral')) {
+            $updateData['referral'] = $this->normalize($request->referral);
         }
 
         $url->update($updateData);
@@ -332,8 +367,8 @@ class UrlController extends Controller
         if (isset($parsedUrl['query'])) {
             parse_str($parsedUrl['query'], $existingParams);
 
-            // Hapus semua UTM parameter dan ref dari URL asli
-            $utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref'];
+            // Hapus semua UTM parameter dan vipCode dari URL asli
+            $utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'vipCode'];
             foreach ($utmKeys as $key) {
                 unset($existingParams[$key]);
             }
@@ -346,7 +381,7 @@ class UrlController extends Controller
             'utm_campaign' => $url->campaign,
             'utm_term' => $url->term,
             'utm_content' => $url->content,
-            'ref' => $url->referral,
+            'vipCode' => $url->referral, // VipCode akan masuk sebagai vipCode parameter
         ])->filter()->toArray();
 
         // ✅ 7. Gabungkan parameter (UTM dari database menang)
