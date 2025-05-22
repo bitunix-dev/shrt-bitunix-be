@@ -19,6 +19,19 @@ use Illuminate\Support\Facades\Http;
 
 class UrlController extends Controller
 {
+    // Tambahkan property untuk mapping source
+    private $sourceMapping = [
+        'tg' => 'telegram',
+        'ig' => 'instagram',
+        'fb' => 'facebook',
+        'x' => 'x-twitter',
+        'wa' => 'whatsapp',
+        'yt' => 'youtube',
+        'tk' => 'tiktok',
+        'li' => 'linkedin',
+        'tw' => 'twitter', // untuk backward compatibility
+    ];
+
     public function index(Request $request)
     {
         // Ambil parameter 'p' dari query string, jika tidak ada, default 10
@@ -41,7 +54,6 @@ class UrlController extends Controller
         ], 200);
     }
 
-
     /**
      * Store a newly created resource in storage.
      */
@@ -62,8 +74,8 @@ class UrlController extends Controller
             // Generate short link unik
             $shortLink = $request->short_link ?? $this->generateUniqueShortLink();
 
-            // Normalisasi semua parameter yang bisa mengandung spasi
-            $sourceName = $this->normalize($request->source);
+            // Map source menggunakan function baru
+            $sourceName = $this->mapSource($request->source);
             $mediumName = $this->normalize($request->medium);
             $campaignName = $this->normalize($request->campaign);
             $termName = $this->normalize($request->term);
@@ -119,13 +131,34 @@ class UrlController extends Controller
             ], 500);
         }
     }
+
+    // Fungsi baru untuk mapping source
+    private function mapSource($source)
+    {
+        if (!$source) {
+            return null;
+        }
+
+        // Convert ke lowercase untuk case-insensitive matching
+        $sourceLower = strtolower(trim($source));
+
+        // Cek apakah ada di mapping
+        if (isset($this->sourceMapping[$sourceLower])) {
+            return $this->sourceMapping[$sourceLower];
+        }
+
+        // Jika tidak ada di mapping, normalize seperti biasa
+        return $this->normalize($source);
+    }
+
     private function normalize($name)
     {
         return $name ? strtolower(preg_replace('/\s+/', '-', trim($name))) : null;
     }
-/**
- * Display the specified resource.
- */
+
+    /**
+     * Display the specified resource.
+     */
     public function show($id)
     {
         $url = Url::with('tags')->find($id);
@@ -169,16 +202,23 @@ class UrlController extends Controller
             'short_link' => 'nullable|string',
         ]);
 
-        $url->update($request->only([
+        // Update dengan mapping source yang baru
+        $updateData = $request->only([
             'destination_url',
-            'source',
             'medium',
             'campaign',
             'term',
             'content',
             'referral',
             'short_link',
-        ]));
+        ]);
+
+        // Map source jika ada
+        if ($request->has('source')) {
+            $updateData['source'] = $this->mapSource($request->source);
+        }
+
+        $url->update($updateData);
 
         // Update tags if any
         if ($request->has('tags') && is_array($request->tags)) {
@@ -198,6 +238,7 @@ class UrlController extends Controller
             'message' => 'URL updated successfully'
         ], 200);
     }
+
     public function destroy($id)
     {
         $url = Url::find($id);
@@ -278,7 +319,6 @@ class UrlController extends Controller
                 ]
             );
 
-
             // ✅ 4. Set cookie agar tidak bisa dihitung lagi dalam 24 jam
             Cookie::queue($cookieName, true, 1440);
             $this->incrementClicks($url);
@@ -309,7 +349,6 @@ class UrlController extends Controller
         return redirect($destinationUrl);
     }
 
-
     /**
      * Generate a unique short link.
      */
@@ -332,6 +371,7 @@ class UrlController extends Controller
         // Generate QR Code sebagai Base64 (PNG tanpa Imagick)
         return base64_encode(QrCode::format('png')->size(300)->errorCorrection('H')->generate($redirectUrl));
     }
+
     private function incrementClicks(Url $url)
     {
         $ip = request()->ip();
@@ -342,6 +382,7 @@ class UrlController extends Controller
             Cache::put($cacheKey, true, now()->addHour()); // Simpan cache 1 jam
         }
     }
+
     public function getQrCode($id)
     {
         $url = Url::findOrFail($id);
