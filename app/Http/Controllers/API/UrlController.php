@@ -324,7 +324,22 @@ class UrlController extends Controller
             $this->incrementClicks($url);
         }
 
-        // ✅ 5. Tambahkan UTM Tracking & Redirect
+        // ✅ 5. Parse destination URL dan hapus UTM parameter yang sudah ada
+        $parsedUrl = parse_url($url->destination_url);
+        $existingParams = [];
+
+        // Ambil query parameter yang sudah ada (kecuali UTM dan ref)
+        if (isset($parsedUrl['query'])) {
+            parse_str($parsedUrl['query'], $existingParams);
+
+            // Hapus semua UTM parameter dan ref dari URL asli
+            $utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref'];
+            foreach ($utmKeys as $key) {
+                unset($existingParams[$key]);
+            }
+        }
+
+        // ✅ 6. Siapkan UTM parameter dari database (mapping sudah diterapkan)
         $utmParams = collect([
             'utm_source' => $url->source,
             'utm_medium' => $url->medium,
@@ -334,14 +349,14 @@ class UrlController extends Controller
             'ref' => $url->referral,
         ])->filter()->toArray();
 
-        $parsedUrl = parse_url($url->destination_url);
-        $queryParams = [];
-        if (isset($parsedUrl['query'])) {
-            parse_str($parsedUrl['query'], $queryParams);
-        }
+        // ✅ 7. Gabungkan parameter (UTM dari database menang)
+        $finalParams = array_merge($existingParams, $utmParams);
 
-        $finalParams = array_merge($utmParams, $queryParams);
-        $destinationUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'] . $parsedUrl['path'];
+        // ✅ 8. Bangun URL final
+        $destinationUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
+        if (isset($parsedUrl['path'])) {
+            $destinationUrl .= $parsedUrl['path'];
+        }
         if (!empty($finalParams)) {
             $destinationUrl .= '?' . http_build_query($finalParams);
         }
