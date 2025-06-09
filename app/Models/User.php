@@ -43,4 +43,20 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /**
+     * Get URLs created by this user
+     */
+    public function urls()
+    {
+        return $this->hasMany(Url::class);
+    }
+
+    /**
+     * Check if user is admin (user_id = 0)
+     */
+    public function isAdmin()
+    {
+        return $this->id === 2;
+    }
 }

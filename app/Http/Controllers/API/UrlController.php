@@ -17,6 +17,7 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Storage;
 use Jenssegers\Agent\Agent;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 
 class UrlController extends Controller
 {
@@ -33,6 +34,9 @@ class UrlController extends Controller
         'tw' => 'twitter', // untuk backward compatibility
     ];
 
+    /**
+     * Get URLs with user filtering
+     */
     public function index(Request $request)
     {
         // Ambil parameter 'p' dari query string, jika tidak ada, default 10
@@ -46,8 +50,16 @@ class UrlController extends Controller
             ], 400);
         }
 
-        // Ambil data dengan pagination sesuai nilai perPage
-        $urls = Url::with('tags')->paginate($perPage);
+        $user = Auth::user();
+
+        // Filter berdasarkan user, kecuali admin (user_id = 0) bisa lihat semua
+        $query = Url::with('tags');
+
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $urls = $query->paginate($perPage);
 
         return response()->json([
             'status' => 200,
@@ -108,8 +120,12 @@ class UrlController extends Controller
                 Medium::firstOrCreate(['name' => $mediumName]);
             }
 
+            // Ambil user_id dari user yang sedang login
+            $userId = Auth::user()->id;
+
             // Simpan URL ke database dengan nilai yang sudah dinormalisasi
             $url = Url::create([
+                'user_id' => $userId, // Auto-assign user_id
                 'destination_url' => $request->destination_url,
                 'short_link' => "short.bitunixads.com/" . $shortLink,
                 'source' => $sourceName,
@@ -174,11 +190,20 @@ class UrlController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display the specified resource with user filtering.
      */
     public function show($id)
     {
-        $url = Url::with('tags')->find($id);
+        $user = Auth::user();
+
+        $query = Url::with('tags')->where('id', $id);
+
+        // Filter berdasarkan user, kecuali admin
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $url = $query->first();
 
         if (!$url) {
             return response()->json([
@@ -198,7 +223,16 @@ class UrlController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $url = Url::find($id);
+        $user = Auth::user();
+
+        $query = Url::where('id', $id);
+
+        // Filter berdasarkan user, kecuali admin
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $url = $query->first();
 
         if (!$url) {
             return response()->json([
@@ -276,7 +310,16 @@ class UrlController extends Controller
 
     public function destroy($id)
     {
-        $url = Url::find($id);
+        $user = Auth::user();
+
+        $query = Url::where('id', $id);
+
+        // Filter berdasarkan user, kecuali admin
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $url = $query->first();
 
         if (!$url) {
             return response()->json([
@@ -435,7 +478,20 @@ class UrlController extends Controller
 
     public function getQrCode($id)
     {
-        $url = Url::findOrFail($id);
+        $user = Auth::user();
+
+        $query = Url::where('id', $id);
+
+        // Filter berdasarkan user, kecuali admin
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $url = $query->first();
+
+        if (!$url) {
+            return response()->json(['message' => 'URL not found'], 404);
+        }
 
         if (!$url->qr_code) {
             return response()->json(['message' => 'QR Code not found'], 404);

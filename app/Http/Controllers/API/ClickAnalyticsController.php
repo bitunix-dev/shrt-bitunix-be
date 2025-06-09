@@ -8,10 +8,16 @@ use App\Models\ClickLog;
 use App\Models\Url;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 
 class ClickAnalyticsController extends Controller
 {
-    private function addIncrementalId($data)
+    /**
+     * Add incremental ID to collection
+     */
+    private function addIncrementalId(Collection $data): Collection
     {
         return $data->map(function ($item, $index) {
             return array_merge(['id' => $index + 1], $item);
@@ -19,19 +25,49 @@ class ClickAnalyticsController extends Controller
     }
 
     /**
-     * Get click analytics for all URLs.
+     * Get user's URL IDs for filtering analytics
      */
-    public function getAllClicks(Request $request)
+    private function getUserUrlIds(): array
     {
+        $user = Auth::user();
+
+        // Admin (user_id = 0) bisa lihat semua URL
+        if ($user->id === 0) {
+            return Url::pluck('id')->toArray();
+        }
+
+        // User biasa hanya bisa lihat URL mereka sendiri
+        return Url::where('user_id', $user->id)->pluck('id')->toArray();
+    }
+
+    /**
+     * Get click analytics for user's URLs only.
+     */
+    public function getAllClicks(Request $request): JsonResponse
+    {
+        // Ambil URL IDs yang boleh diakses user
+        $userUrlIds = $this->getUserUrlIds();
+
+        if (empty($userUrlIds)) {
+            return response()->json([
+                'status' => 200,
+                'data' => [
+                    'clicks' => [],
+                    'total_clicks' => 0,
+                ],
+            ]);
+        }
+
         // Ambil rentang waktu (default: 24 jam terakhir)
         $startDate = $request->query('start_date', Carbon::now()->subDays(1));
         $endDate = $request->query('end_date', Carbon::now());
 
-        // Ambil jumlah klik per jam
+        // Ambil jumlah klik per jam untuk URL yang dimiliki user
         $clicksData = ClickLog::select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour"),
                 DB::raw("COUNT(*) as clicks")
             )
+            ->whereIn('url_id', $userUrlIds)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('hour')
             ->orderBy('hour', 'ASC')
@@ -41,15 +77,26 @@ class ClickAnalyticsController extends Controller
             'status' => 200,
             'data' => [
                 'clicks' => $clicksData,
-                'total_clicks' => ClickLog::whereBetween('created_at', [$startDate, $endDate])->count(),
+                'total_clicks' => ClickLog::whereIn('url_id', $userUrlIds)
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count(),
             ],
         ]);
     }
 
-    public function getUrls(Request $request)
+    public function getUrls(Request $request): JsonResponse
     {
+        $user = Auth::user();
         $perPage = $request->input('p', 10);
-        $urls = Url::orderBy('clicks', 'DESC')->with('tags')->paginate($perPage);
+
+        // Filter URLs berdasarkan user
+        $query = Url::orderBy('clicks', 'DESC')->with('tags');
+
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $urls = $query->paginate($perPage);
 
         return response()->json([
             'status' => 200,
@@ -57,8 +104,10 @@ class ClickAnalyticsController extends Controller
         ]);
     }
 
-    // Method yang diperbaiki
-    private function getClicksByField(Request $request, string $field)
+    /**
+     * Method yang diperbaiki dengan user filtering
+     */
+    private function getClicksByField(Request $request, string $field): JsonResponse
     {
         if (empty($field)) {
             return response()->json([
@@ -67,18 +116,33 @@ class ClickAnalyticsController extends Controller
             ], 400);
         }
 
-        $startDate = $request->query('start_date', Carbon::now()->subDays(30)); // Ubah ke 30 hari
+        // Ambil URL IDs yang boleh diakses user
+        $userUrlIds = $this->getUserUrlIds();
+
+        if (empty($userUrlIds)) {
+            return response()->json([
+                'status' => 200,
+                'data' => [
+                    'data' => [],
+                    'current_page' => 1,
+                    'total' => 0,
+                ]
+            ]);
+        }
+
+        $startDate = $request->query('start_date', Carbon::now()->subDays(30));
         $endDate = $request->query('end_date', Carbon::now());
 
-        // Query yang lebih sederhana tanpa subquery kompleks
+        // Query dengan filter user URLs
         $query = ClickLog::select(
                 $field,
                 DB::raw('COUNT(*) as total_clicks'),
-                DB::raw('MAX(country_flag) as country_flag') // Ambil country_flag terbaru
+                DB::raw('MAX(country_flag) as country_flag')
             )
+            ->whereIn('url_id', $userUrlIds)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->whereNotNull($field)
-            ->where($field, '!=', '') // Pastikan field tidak kosong
+            ->where($field, '!=', '')
             ->groupBy($field)
             ->orderByDesc('total_clicks');
 
@@ -109,12 +173,27 @@ class ClickAnalyticsController extends Controller
     }
 
     /**
-     * Get click analytics for a specific short link.
+     * Get click analytics for a specific short link with user filtering.
      */
-    public function getClicksByUrl(Request $request, $id)
+    public function getClicksByUrl(Request $request, int $id): JsonResponse
     {
-        // Cek apakah URL ada
-        $url = Url::with('tags')->findOrFail($id);
+        $user = Auth::user();
+
+        // Cek apakah URL ada dan bisa diakses user
+        $query = Url::with('tags')->where('id', $id);
+
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
+
+        $url = $query->first();
+
+        if (!$url) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'URL not found'
+            ], 404);
+        }
 
         // Ambil rentang waktu (default: 24 jam terakhir)
         $startDate = $request->query('start_date', Carbon::now()->subDays(1));
@@ -161,18 +240,13 @@ class ClickAnalyticsController extends Controller
     }
 
     /**
-     * Get detailed click analytics for a specific short link by its URL.
+     * Get date range for analytics
      */
-    public function getClicksByShortLink(Request $request, $shortLink)
+    private function getDateRange(Request $request, Url $url): array
     {
-        // Find the URL by short_link
-        $url = Url::where('short_link', $shortLink)->firstOrFail();
-
-        // Ambil rentang waktu. Jika all=true, ambil semua data
         $allData = $request->query('all', 'false') === 'true';
 
         if ($allData) {
-            // Ambil data paling awal dan paling akhir untuk URL ini
             $firstClick = ClickLog::where('url_id', $url->id)
                 ->orderBy('created_at', 'ASC')
                 ->first();
@@ -182,46 +256,67 @@ class ClickAnalyticsController extends Controller
                 ->first();
 
             if ($firstClick && $lastClick) {
-                $startDate = $firstClick->created_at;
-                $endDate = $lastClick->created_at;
-            } else {
-                // Jika tidak ada klik, gunakan default
-                $startDate = Carbon::now()->subDays(7);
-                $endDate = Carbon::now();
+                return [
+                    'start_date' => $firstClick->created_at,
+                    'end_date' => $lastClick->created_at,
+                    'is_all_data' => true
+                ];
             }
-        } else {
-            // Gunakan parameter request atau default (7 hari terakhir)
-            $startDate = $request->query('start_date', Carbon::now()->subDays(7));
-            $endDate = $request->query('end_date', Carbon::now());
         }
 
-        // Tentukan format waktu berdasarkan rentang
-        $diffInDays = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate));
-        $dateFormat = '%Y-%m-%d';  // Default: harian
+        return [
+            'start_date' => $request->query('start_date', Carbon::now()->subDays(7)),
+            'end_date' => $request->query('end_date', Carbon::now()),
+            'is_all_data' => $allData
+        ];
+    }
 
-        // Lebih dari 90 hari, gunakan format bulanan
-        if ($diffInDays > 90) {
-            $dateFormat = '%Y-%m';
-        }
-        // Lebih dari 365 hari, gunakan format kuartalan
+    /**
+     * Get time format based on date range
+     */
+    private function getTimeFormat(Carbon $startDate, Carbon $endDate): array
+    {
+        $diffInDays = $startDate->diffInDays($endDate);
+
         if ($diffInDays > 365) {
-            $dateFormat = '%Y-%m'; // Tetap bulanan, atau bisa disesuaikan ke kuartalan
+            return ['format' => '%Y-%m', 'label' => 'quarterly'];
         }
 
-        // Get hourly clicks for this specific URL
-        $clicksData = ClickLog::select(
-            DB::raw("DATE_FORMAT(created_at, '{$dateFormat}') as time_period"),
-            DB::raw("COUNT(*) as clicks")
-        )
-        ->where('url_id', $url->id)
-        ->whereBetween('created_at', [$startDate, $endDate])
-        ->groupBy('time_period')
-        ->orderBy('time_period', 'ASC')
-        ->get();
+        if ($diffInDays > 90) {
+            return ['format' => '%Y-%m', 'label' => 'monthly'];
+        }
 
-        // Get country statistics
-        $countries = ClickLog::select('country', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
-            ->where('url_id', $url->id)
+        return ['format' => '%Y-%m-%d', 'label' => 'daily'];
+    }
+
+    /**
+     * Get analytics data for specific field
+     */
+    private function getAnalyticsForField(int $urlId, string $field, int $limit = 10): Collection
+    {
+        return ClickLog::select($field, DB::raw('COUNT(*) as total_clicks'))
+            ->where('url_id', $urlId)
+            ->whereNotNull($field)
+            ->groupBy($field)
+            ->orderByDesc('total_clicks')
+            ->limit($limit)
+            ->get()
+            ->map(function ($item, $index) use ($field) {
+                return [
+                    'id' => $index + 1,
+                    $field => $item->$field,
+                    'total_clicks' => $item->total_clicks
+                ];
+            });
+    }
+
+    /**
+     * Get country analytics with flags
+     */
+    private function getCountryAnalytics(int $urlId): Collection
+    {
+        return ClickLog::select('country', DB::raw('COUNT(*) as total_clicks'), 'country_flag')
+            ->where('url_id', $urlId)
             ->whereNotNull('country')
             ->groupBy('country', 'country_flag')
             ->orderByDesc('total_clicks')
@@ -235,205 +330,91 @@ class ClickAnalyticsController extends Controller
                     'country_flag' => $item->country_flag
                 ];
             });
+    }
 
-        // Get city statistics
-        $cities = ClickLog::select('city', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('city')
-            ->groupBy('city')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'city' => $item->city,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+    /**
+     * Get detailed click analytics for a specific short link by its URL with user filtering.
+     */
+    public function getClicksByShortLink(Request $request, string $shortLink): JsonResponse
+    {
+        $user = Auth::user();
 
-        // Get region statistics
-        $regions = ClickLog::select('region', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('region')
-            ->groupBy('region')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'region' => $item->region,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        // Find the URL by short_link dengan user filtering
+        $query = Url::where('short_link', $shortLink);
 
-        // Get continent statistics
-        $continents = ClickLog::select('continent', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('continent')
-            ->groupBy('continent')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'continent' => $item->continent,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        if ($user->id !== 0) {
+            $query->where('user_id', $user->id);
+        }
 
-        // Get device statistics
-        $devices = ClickLog::select('device', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('device')
-            ->groupBy('device')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'device' => $item->device,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        $url = $query->first();
 
-        // Get browser statistics
-        $browsers = ClickLog::select('browser', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('browser')
-            ->groupBy('browser')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'browser' => $item->browser,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        if (!$url) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'URL not found or access denied'
+            ], 404);
+        }
 
-        // Get campaign/source statistics
-        $sources = ClickLog::select('source', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('source')
-            ->groupBy('source')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'source' => $item->source,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        // Get date range
+        $dateRange = $this->getDateRange($request, $url);
+        $startDate = Carbon::parse($dateRange['start_date']);
+        $endDate = Carbon::parse($dateRange['end_date']);
 
-        $mediums = ClickLog::select('medium', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('medium')
-            ->groupBy('medium')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'medium' => $item->medium,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        // Get time format
+        $timeConfig = $this->getTimeFormat($startDate, $endDate);
 
-        $campaigns = ClickLog::select('campaign', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('campaign')
-            ->groupBy('campaign')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'campaign' => $item->campaign,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        // Get clicks timeline
+        $clicksData = ClickLog::select(
+            DB::raw("DATE_FORMAT(created_at, '{$timeConfig['format']}') as time_period"),
+            DB::raw("COUNT(*) as clicks")
+        )
+        ->where('url_id', $url->id)
+        ->whereBetween('created_at', [$startDate, $endDate])
+        ->groupBy('time_period')
+        ->orderBy('time_period', 'ASC')
+        ->get();
 
-        $terms = ClickLog::select('term', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('term')
-            ->groupBy('term')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'term' => $item->term,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
-
-        $contents = ClickLog::select('content', DB::raw('COUNT(*) as total_clicks'))
-            ->where('url_id', $url->id)
-            ->whereNotNull('content')
-            ->groupBy('content')
-            ->orderByDesc('total_clicks')
-            ->limit(10)
-            ->get()
-            ->map(function ($item, $index) {
-                return [
-                    'id' => $index + 1,
-                    'content' => $item->content,
-                    'total_clicks' => $item->total_clicks
-                ];
-            });
+        // Get all analytics data
+        $analytics = [
+            'countries' => $this->getCountryAnalytics($url->id),
+            'cities' => $this->getAnalyticsForField($url->id, 'city'),
+            'regions' => $this->getAnalyticsForField($url->id, 'region'),
+            'continents' => $this->getAnalyticsForField($url->id, 'continent'),
+            'devices' => $this->getAnalyticsForField($url->id, 'device'),
+            'browsers' => $this->getAnalyticsForField($url->id, 'browser'),
+            'sources' => $this->getAnalyticsForField($url->id, 'source'),
+            'mediums' => $this->getAnalyticsForField($url->id, 'medium'),
+            'campaigns' => $this->getAnalyticsForField($url->id, 'campaign'),
+            'terms' => $this->getAnalyticsForField($url->id, 'term'),
+            'contents' => $this->getAnalyticsForField($url->id, 'content')
+        ];
 
         return response()->json([
             'status' => 200,
             'data' => [
                 'url' => $url,
                 'clicks_timeline' => $clicksData,
-                'time_format' => $diffInDays > 365 ? 'quarterly' : ($diffInDays > 90 ? 'monthly' : 'daily'),
-                'date_range' => [
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                    'is_all_data' => $allData
-                ],
-                'total_clicks' => $url->clicks, // Gunakan total clicks dari URL daripada menghitung ulang
+                'time_format' => $timeConfig['label'],
+                'date_range' => $dateRange,
+                'total_clicks' => $url->clicks,
                 'total_clicks_in_range' => ClickLog::where('url_id', $url->id)
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->count(),
-                'analytics' => [
-                    'countries' => $countries,
-                    'cities' => $cities,
-                    'regions' => $regions,
-                    'continents' => $continents,
-                    'devices' => $devices,
-                    'browsers' => $browsers,
-                    'sources' => $sources,
-                    'mediums' => $mediums,
-                    'campaigns' => $campaigns,
-                    'terms' => $terms,
-                    'contents' => $contents
-                ]
+                'analytics' => $analytics
             ],
         ]);
     }
 
-    // Methods untuk setiap field
-    public function getClicksByCountry(Request $request) { return $this->getClicksByField($request, 'country'); }
-    public function getClicksByCity(Request $request) { return $this->getClicksByField($request, 'city'); }
-    public function getClicksByRegion(Request $request) { return $this->getClicksByField($request, 'region'); }
-    public function getClicksByContinent(Request $request) { return $this->getClicksByField($request, 'continent'); }
-    public function getClicksBySource(Request $request) { return $this->getClicksByField($request, 'source'); }
-    public function getClicksByMedium(Request $request) { return $this->getClicksByField($request, 'medium'); }
-    public function getClicksByCampaign(Request $request) { return $this->getClicksByField($request, 'campaign'); }
-    public function getClicksByTerm(Request $request) { return $this->getClicksByField($request, 'term'); }
-    public function getClicksByContent(Request $request) { return $this->getClicksByField($request, 'content'); }
-    public function getClicksByDevice(Request $request) { return $this->getClicksByField($request, 'device'); }
-    public function getClicksByBrowser(Request $request) { return $this->getClicksByField($request, 'browser'); }
+    // Methods untuk setiap field dengan user filtering
+    public function getClicksByCountry(Request $request): JsonResponse { return $this->getClicksByField($request, 'country'); }
+    public function getClicksByCity(Request $request): JsonResponse { return $this->getClicksByField($request, 'city'); }
+    public function getClicksByRegion(Request $request): JsonResponse { return $this->getClicksByField($request, 'region'); }
+    public function getClicksByContinent(Request $request): JsonResponse { return $this->getClicksByField($request, 'continent'); }
+    public function getClicksBySource(Request $request): JsonResponse { return $this->getClicksByField($request, 'source'); }
+    public function getClicksByMedium(Request $request): JsonResponse { return $this->getClicksByField($request, 'medium'); }
+    public function getClicksByCampaign(Request $request): JsonResponse { return $this->getClicksByField($request, 'campaign'); }
+    public function getClicksByTerm(Request $request): JsonResponse { return $this->getClicksByField($request, 'term'); }
+    public function getClicksByContent(Request $request): JsonResponse { return $this->getClicksByField($request, 'content'); }
+    public function getClicksByDevice(Request $request): JsonResponse { return $this->getClicksByField($request, 'device'); }
+    public function getClicksByBrowser(Request $request): JsonResponse { return $this->getClicksByField($request, 'browser'); }
 }

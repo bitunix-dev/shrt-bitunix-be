@@ -10,6 +10,7 @@ class Url extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'destination_url',
         'short_link',
         'qr_code',
@@ -24,12 +25,24 @@ class Url extends Model
 
     protected $casts = [
         'clicks' => 'integer',
+        'user_id' => 'integer',
     ];
+
     protected $appends = ['mixed_url'];
+
+    /**
+     * Get the user who created this URL
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function tags()
     {
         return $this->belongsToMany(Tag::class);
     }
+
     protected static function boot()
     {
         parent::boot();
@@ -38,6 +51,7 @@ class Url extends Model
             $query->orderBy('created_at', 'desc');
         });
     }
+
     public function getMixedUrlAttribute()
     {
         $utmParams = collect([
