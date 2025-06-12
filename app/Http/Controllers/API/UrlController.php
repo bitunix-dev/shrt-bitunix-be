@@ -123,11 +123,14 @@ class UrlController extends Controller
             // Ambil user_id dari user yang sedang login
             $userId = Auth::user()->id;
 
+            // Ambil FRONTEND_URL dari environment variable
+            $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
+
             // Simpan URL ke database dengan nilai yang sudah dinormalisasi
             $url = Url::create([
                 'user_id' => $userId, // Auto-assign user_id
                 'destination_url' => $request->destination_url,
-                'short_link' => "short.bitunixads.com/" . $shortLink,
+                'short_link' => $frontendUrl . "/" . $shortLink,
                 'source' => $sourceName,
                 'medium' => $mediumName,
                 'campaign' => $campaignName,
@@ -341,12 +344,15 @@ class UrlController extends Controller
      */
     public function redirect($shortLink, Request $request)
     {
-        // Hapus bagian domain (short.bitunixads.com/) dari shortLink
-        $shortLink = str_replace('short.bitunixads.com/', '', $shortLink);
+        // Ambil FRONTEND_URL dari environment variable
+        $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
+
+        // Hapus bagian domain dari shortLink
+        $shortLink = str_replace($frontendUrl . '/', '', $shortLink);
         \Log::info('Redirecting shortLink: ' . $shortLink);
 
         // Cari URL berdasarkan shortLink saja tanpa domain
-        $url = Url::where('short_link', 'short.bitunixads.com/' . $shortLink)->firstOrFail();
+        $url = Url::where('short_link', $frontendUrl . '/' . $shortLink)->firstOrFail();
         if (!$url) {
             return response()->json(['error' => 'Not Found'], 404);
         }
