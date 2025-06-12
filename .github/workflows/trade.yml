@@ -1,0 +1,59 @@
+name: Deployment of Shorten GetMyTrade
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+
+      - name: Install Dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+          composer dump-autoload
+          php artisan config:clear
+
+      - name: Copy Environment File
+        run: |
+          cp .env.staging .env
+
+      - name: Install sshpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sshpass -p '5G&ZZoT6B1jH)f?bC&j9' rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" ./ root@156.67.221.244:/var/www/getmytrade/
+
+          sshpass -p '5G&ZZoT6B1jH)f?bC&j9' ssh -o StrictHostKeyChecking=no root@156.67.221.244 << 'EOF'
+            cd /var/www/getmytrade
+
+            # Set Permissions
+            chown -R www-data:www-data /var/www/getmytrade
+            chmod -R 775 /var/www/getmytrade/storage /var/www/getmytrade/bootstrap/cache
+            chown -R www-data:www-data /var/www/getmytrade/storage /var/www/getmytrade/bootstrap/cache
+            chmod -R 777 /var/www/getmytrade/storage /var/www/getmytrade/bootstrap/cache
+
+            # Laravel Commands
+            php8.3 artisan key:generate --ansi
+            php8.3 artisan migrate --force
+            php8.3 artisan optimize:clear
+            php8.3 artisan storage:link
+            php8.3 artisan config:clear
+            php8.3 artisan cache:clear
+            php8.3 artisan route:clear
+            php8.3 artisan view:clear
+          EOF
