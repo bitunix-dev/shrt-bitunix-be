@@ -28,7 +28,7 @@ jobs:
 
       - name: Copy Environment File
         run: |
-          cp .env.staging .env
+          cp .env.mytrade .env
 
       - name: Install sshpass
         run: sudo apt-get install -y sshpass
