@@ -62,19 +62,13 @@ class User extends Authenticatable
     }
     public function performLogout()
     {
-        // Method 1: Gunakan Eloquent (jika tidak ada masalah dengan observer/mutator)
-        $this->email_verified_at = null;
-        $this->save();
-
-        // Method 2: Gunakan Query Builder (jika Eloquent gagal)
+        \DB::transaction(function () {
         \DB::table('users')
             ->where('id', $this->id)
             ->update(['email_verified_at' => null]);
 
-        // Hapus data verifikasi email
         EmailVerification::where('user_id', $this->id)->delete();
-
-        // Hapus semua tokens (Sanctum)
         $this->tokens()->delete();
+    });
     }
 }
