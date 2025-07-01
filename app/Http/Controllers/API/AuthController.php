@@ -308,9 +308,8 @@ class AuthController extends Controller
     private function checkEmailVerificationExpiry(User $user)
     {
         if ($user->email_verified_at) {
-            // Set verification expiry time (24 hours from verification)
-            $verificationExpiryHours = env('EMAIL_VERIFICATION_EXPIRY_HOURS', 24);
-            $expiryTime = Carbon::parse($user->email_verified_at)->addHours($verificationExpiryHours);
+            // Set verification expiry time (23 hours 55 minutes from verification)
+            $expiryTime = Carbon::parse($user->email_verified_at)->addHours(23)->addMinutes(55);
 
             // If verification has expired, reset it
             if (Carbon::now()->greaterThan($expiryTime)) {

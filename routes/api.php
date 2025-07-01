@@ -21,7 +21,7 @@ Route::post('resend-verification', [AuthController::class, 'resendVerificationCo
     Route::post('email/resend', [AuthController::class, 'resendEmailVerification']);
 Route::middleware('auth:sanctum')->put('update-name', [AuthController::class, 'updateName']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'check.email.expiry'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
     Route::apiResource('urls', UrlController::class);
     Route::apiResource('sources', SourceController::class);
