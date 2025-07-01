@@ -251,7 +251,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $user = $request->user();
+        $user = $user = Auth::user();
 
         // 1. Reset email verification status when user logs out
         $user->email_verified_at = null;
