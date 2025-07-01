@@ -254,8 +254,7 @@ class AuthController extends Controller
         $user = Auth::user();
 
         // 1. Reset email verification status when user logs out
-        $user->email_verified_at = null;
-        $user->save();
+        $user->performLogout();
 
         // 2. Delete all tokens for this user
         $user->tokens->each(function($token) {

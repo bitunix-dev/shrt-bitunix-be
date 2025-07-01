@@ -60,4 +60,15 @@ class User extends Authenticatable
     {
         return $this->id === 2;
     }
+    public function performLogout()
+    {
+        $this->email_verified_at = null;
+        $this->save();
+
+        // Hapus data verifikasi email
+        EmailVerification::where('user_id', $this->id)->delete();
+
+        // Hapus semua tokens (Sanctum)
+        $this->tokens()->delete();
+    }
 }
