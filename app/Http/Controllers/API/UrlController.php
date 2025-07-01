@@ -10,7 +10,7 @@ use App\Models\Url;
 use App\Models\Tag;
 use App\Models\Source;
 use App\Models\Medium;
-use App\Models\VipCode; // Import VipCode model
+use App\Models\VipCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -81,12 +81,40 @@ class UrlController extends Controller
             'term' => 'nullable|string',
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
-            'vipCode' => 'nullable|string', // Tambah validasi vipCode
+            'vipCode' => 'nullable|string',
+            'short_link' => 'nullable|string|unique:urls,short_link', // ✅ Tambah validasi unique
         ]);
 
         try {
-            // Generate short link unik
-            $shortLink = $request->short_link ?? $this->generateUniqueShortLink();
+            // ✅ Perbaikan: Handle custom short link dengan validasi duplikasi
+            $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
+
+            if ($request->short_link) {
+                // Jika user memberikan custom short link
+                $customShortLink = trim($request->short_link);
+
+                // Hapus domain jika user memasukkan full URL
+                $customShortLink = str_replace([$frontendUrl . '/', 'https://', 'http://'], '', $customShortLink);
+
+                // Buat full short link
+                $fullShortLink = $frontendUrl . "/" . $customShortLink;
+
+                // ✅ Cek duplikasi
+                if (Url::where('short_link', $fullShortLink)->exists()) {
+                    return response()->json([
+                        'status' => 422,
+                        'message' => 'Short link is already in use. Please choose another one.',
+                        'errors' => [
+                            'short_link' => ['Short link is already in use.']
+                        ]
+                    ], 422);
+                }
+
+                $shortLinkCode = $customShortLink;
+            } else {
+                // Generate short link unik otomatis
+                $shortLinkCode = $this->generateUniqueShortLink();
+            }
 
             // Map source menggunakan function baru
             $sourceName = $this->mapSource($request->source);
@@ -104,10 +132,9 @@ class UrlController extends Controller
                 // Simpan vipCode ke tabel vip_codes jika belum ada
                 VipCode::firstOrCreate(
                     ['partner_code' => $vipCodeName],
-                    ['partner_name' => $vipCodeName] // Default partner_name sama dengan partner_code
+                    ['partner_name' => $vipCodeName]
                 );
             } elseif ($request->referral) {
-                // Jika tidak ada vipCode tapi ada referral, gunakan referral
                 $referralName = $this->normalize($request->referral);
             }
 
@@ -123,20 +150,20 @@ class UrlController extends Controller
             // Ambil user_id dari user yang sedang login
             $userId = Auth::user()->id;
 
-            // Ambil FRONTEND_URL dari environment variable
-            $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
+            // ✅ Buat full short link
+            $fullShortLink = $frontendUrl . "/" . $shortLinkCode;
 
             // Simpan URL ke database dengan nilai yang sudah dinormalisasi
             $url = Url::create([
-                'user_id' => $userId, // Auto-assign user_id
+                'user_id' => $userId,
                 'destination_url' => $request->destination_url,
-                'short_link' => $frontendUrl . "/" . $shortLink,
+                'short_link' => $fullShortLink, // ✅ Simpan full URL
                 'source' => $sourceName,
                 'medium' => $mediumName,
                 'campaign' => $campaignName,
                 'term' => $termName,
                 'content' => $contentName,
-                'referral' => $referralName, // Simpan vipCode ke referral field
+                'referral' => $referralName,
             ]);
             $url->save();
 
@@ -244,6 +271,7 @@ class UrlController extends Controller
             ], 404);
         }
 
+        // ✅ Tambah validasi unique untuk update, kecuali untuk URL yang sedang di-update
         $request->validate([
             'destination_url' => 'nullable|url',
             'tags' => 'nullable|array',
@@ -253,8 +281,8 @@ class UrlController extends Controller
             'term' => 'nullable|string',
             'content' => 'nullable|string',
             'referral' => 'nullable|string',
-            'vipCode' => 'nullable|string', // Tambah validasi vipCode
-            'short_link' => 'nullable|string',
+            'vipCode' => 'nullable|string',
+            'short_link' => 'nullable|string|unique:urls,short_link,' . $id, // ✅ Ignore current record
         ]);
 
         // Update dengan mapping source yang baru
@@ -264,8 +292,35 @@ class UrlController extends Controller
             'campaign',
             'term',
             'content',
-            'short_link',
         ]);
+
+        // ✅ Handle custom short link untuk update
+        if ($request->has('short_link') && $request->short_link) {
+            $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
+            $customShortLink = trim($request->short_link);
+
+            // Hapus domain jika user memasukkan full URL
+            $customShortLink = str_replace([$frontendUrl . '/', 'https://', 'http://'], '', $customShortLink);
+
+            $fullShortLink = $frontendUrl . "/" . $customShortLink;
+
+            // Cek duplikasi (kecuali untuk URL yang sedang di-update)
+            $existingUrl = Url::where('short_link', $fullShortLink)
+                             ->where('id', '!=', $id)
+                             ->first();
+
+            if ($existingUrl) {
+                return response()->json([
+                    'status' => 422,
+                    'message' => 'Short link is already in use. Please choose another one.',
+                    'errors' => [
+                        'short_link' => ['Short link is already in use.']
+                    ]
+                ], 422);
+            }
+
+            $updateData['short_link'] = $fullShortLink;
+        }
 
         // Map source jika ada
         if ($request->has('source')) {
@@ -362,7 +417,7 @@ class UrlController extends Controller
         // Cek apakah pengguna sudah klik dalam 24 jam (via database)
         $alreadyClicked = ClickLog::where('url_id', $url->id)
             ->where('ip_address', $ipAddress)
-            ->where('created_at', '>=', now()->subHours(24)) // Bisa diubah ke berapa jam
+            ->where('created_at', '>=', now()->subHours(24))
             ->exists();
 
         // Cek apakah cookie sudah ada
@@ -370,7 +425,7 @@ class UrlController extends Controller
 
             // ✅ 1. Ambil Data Geolokasi dari IPGeoLocations API
             $geoResponse = Http::get("https://api.ipgeolocation.io/ipgeo", [
-                'apiKey' => env('IPGEOLOCATION_API_KEY'), // API Key dari .env
+                'apiKey' => env('IPGEOLOCATION_API_KEY'),
                 'ip' => $ipAddress
             ]);
 
@@ -430,7 +485,7 @@ class UrlController extends Controller
             'utm_campaign' => $url->campaign,
             'utm_term' => $url->term,
             'utm_content' => $url->content,
-            'vipCode' => $url->referral, // VipCode akan masuk sebagai vipCode parameter
+            'vipCode' => $url->referral,
         ])->filter()->toArray();
 
         // ✅ 7. Gabungkan parameter (UTM dari database menang)
@@ -449,15 +504,18 @@ class UrlController extends Controller
     }
 
     /**
-     * Generate a unique short link.
+     * ✅ Generate a unique short link yang benar-benar cek duplikasi
      */
     private function generateUniqueShortLink($length = 6)
     {
-        do {
-            $shortLink = Str::random($length);
-        } while (Url::where('short_link', $shortLink)->exists());
+        $frontendUrl = env('FRONTEND_URL', 'short.bitunixads.com');
 
-        return $shortLink;
+        do {
+            $shortLinkCode = Str::random($length);
+            $fullShortLink = $frontendUrl . "/" . $shortLinkCode;
+        } while (Url::where('short_link', $fullShortLink)->exists()); // ✅ Cek full URL
+
+        return $shortLinkCode; // ✅ Return hanya kode, bukan full URL
     }
 
     /**
@@ -478,7 +536,7 @@ class UrlController extends Controller
 
         if (!Cache::has($cacheKey)) {
             $url->increment('clicks');
-            Cache::put($cacheKey, true, now()->addHour()); // Simpan cache 1 jam
+            Cache::put($cacheKey, true, now()->addHour());
         }
     }
 
