@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use App\Models\User;
+use App\Models\EmailVerification;
 use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
 use Laravolt\Avatar\Avatar;
 use Illuminate\Support\Str;
@@ -18,42 +21,150 @@ use Cloudinary\Configuration\Configuration;
 class AuthController extends Controller
 {
     // Register
-// Register
-public function register(Request $request)
-{
-    $request->validate([
-        'email' => 'required|string|email|max:255|unique:users',
-        'password' => 'required|string|min:8|confirmed',
-    ]);
+    public function register(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
 
-    // Ambil bagian nama sebelum "@" dari email
-    $username = explode('@', $request->email)[0];
+        // Ambil bagian nama sebelum "@" dari email
+        $username = explode('@', $request->email)[0];
 
-    // Ganti underscore dan titik dengan spasi
-    $username = str_replace(['_', '.'], ' ', $username);
+        // Ganti underscore dan titik dengan spasi
+        $username = str_replace(['_', '.'], ' ', $username);
 
-    // Capitalize the first letter of each word
-    $name = ucwords($username);
+        // Capitalize the first letter of each word
+        $name = ucwords($username);
 
-    // Simpan avatar
-    $avatarPath = $this->saveAvatar($name); // Panggil fungsi untuk membuat dan menyimpan avatar ke Cloudinary
+        // Simpan avatar
+        $avatarPath = $this->saveAvatar($name);
 
-    $user = User::create([
-        'name' => $name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-        'avatar' => $avatarPath,  // Simpan URL avatar dari Cloudinary
-    ]);
+        // ✅ Buat user dengan email_verified_at = null (belum terverifikasi)
+        $user = User::create([
+            'name' => $name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'avatar' => $avatarPath,
+            'email_verified_at' => null, // ✅ User belum terverifikasi
+        ]);
 
-    return response()->json([
-        'status' => 201,
-        'data' => $user,
-        'message' => 'User registered successfully!'
-    ], 201);
+        // ✅ Generate 6 digit verification code
+        $verificationCode = $this->generateVerificationCode();
 
-}
+        // ✅ Simpan verification code ke database
+        EmailVerification::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'code' => $verificationCode,
+            'expires_at' => Carbon::now()->addMinutes(15), // Expire dalam 15 menit
+        ]);
 
-// Login
+        // ✅ Kirim email verification
+        $this->sendVerificationEmail($user->email, $verificationCode, $name);
+
+        return response()->json([
+            'status' => 201,
+            'data' => [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'name' => $user->name,
+                'verified' => false
+            ],
+            'message' => 'User registered successfully! Please check your email for verification code.'
+        ], 201);
+    }
+
+    // ✅ Verify Email dengan 6 digit code
+    public function verifyEmail(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        // ✅ Cari verification code yang valid
+        $verification = EmailVerification::where('email', $request->email)
+            ->where('code', $request->code)
+            ->where('expires_at', '>', Carbon::now())
+            ->where('is_used', false)
+            ->first();
+
+        if (!$verification) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Invalid or expired verification code.'
+            ], 400);
+        }
+
+        // ✅ Update user menjadi verified
+        $user = User::find($verification->user_id);
+        $user->email_verified_at = Carbon::now();
+        $user->save();
+
+        // ✅ Mark verification code sebagai used
+        $verification->is_used = true;
+        $verification->save();
+
+        return response()->json([
+            'status' => 200,
+            'data' => [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'name' => $user->name,
+                'verified' => true
+            ],
+            'message' => 'Email verified successfully! You can now login.'
+        ], 200);
+    }
+
+    // ✅ Resend verification code
+    public function resendVerificationCode(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        if ($user->email_verified_at) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Email already verified.'
+            ], 400);
+        }
+
+        // ✅ Delete old verification codes
+        EmailVerification::where('email', $request->email)->delete();
+
+        // ✅ Generate new verification code
+        $verificationCode = $this->generateVerificationCode();
+
+        // ✅ Simpan verification code baru
+        EmailVerification::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'code' => $verificationCode,
+            'expires_at' => Carbon::now()->addMinutes(15),
+        ]);
+
+        // ✅ Kirim email verification
+        $this->sendVerificationEmail($user->email, $verificationCode, $user->name);
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Verification code sent successfully!'
+        ], 200);
+    }
+
+    // Login - ✅ dengan pengecekan email verification
     public function login(Request $request)
     {
         $request->validate([
@@ -63,6 +174,17 @@ public function register(Request $request)
 
         if (Auth::attempt($request->only('email', 'password'))) {
             $user = Auth::user();
+
+            // ✅ Cek apakah email sudah terverifikasi
+            if (!$user->email_verified_at) {
+                Auth::logout();
+                return response()->json([
+                    'status' => 403,
+                    'message' => 'Please verify your email before logging in.',
+                    'needs_verification' => true
+                ], 403);
+            }
+
             $token = $user->createToken('API Token')->plainTextToken;
 
             return response()->json([
@@ -79,6 +201,7 @@ public function register(Request $request)
             'email' => ['The provided credentials are incorrect.'],
         ]);
     }
+
     public function updateName(Request $request)
     {
         $request->validate([
@@ -95,6 +218,7 @@ public function register(Request $request)
             'message' => 'Name updated successfully!'
         ]);
     }
+
     public function saveAvatar($name)
     {
         // Ambil inisial dari nama pengguna
@@ -102,10 +226,10 @@ public function register(Request $request)
 
         // Buat avatar menggunakan Laravolt Avatar
         $avatar = new Avatar();
-        $imageSvg = $avatar->create($initials) // Membuat avatar dengan inisial
-            ->setDimension(100, 100)  // Ukuran avatar
-            ->setFontSize(40)         // Ukuran font
-            ->toSvg();               // Menghasilkan avatar dalam format SVG
+        $imageSvg = $avatar->create($initials)
+            ->setDimension(100, 100)
+            ->setFontSize(40)
+            ->toSvg();
 
         // Base64 encode the SVG string
         $imageBase64 = base64_encode($imageSvg);
@@ -115,27 +239,65 @@ public function register(Request $request)
 
         // Upload base64-encoded SVG to Cloudinary
         $uploadResult = $cloudinary->uploadApi()->upload('data:image/svg+xml;base64,' . $imageBase64, [
-            'folder' => 'avatars', // Tentukan folder di Cloudinary
-            'public_id' => Str::random(10), // Public ID yang unik
+            'folder' => 'avatars',
+            'public_id' => Str::random(10),
             'resource_type' => 'image',
-            'format' => 'svg'  // Format yang sesuai dengan Cloudinary
+            'format' => 'svg'
         ]);
 
         // Ambil URL gambar dari Cloudinary
         $avatarUrl = $uploadResult['secure_url'];
 
-        return $avatarUrl; // Kembalikan URL avatar yang telah disimpan di Cloudinary
+        return $avatarUrl;
     }
+
     public function logout(Request $request)
     {
-        // Mengambil token API yang digunakan oleh user
         $request->user()->tokens->each(function($token) {
-            $token->delete(); // Menghapus token API yang digunakan oleh user
+            $token->delete();
         });
 
         return response()->json([
             'status' => 200,
             'message' => 'User logged out successfully!'
         ], 200);
+    }
+
+    // ✅ Helper Functions
+
+    /**
+     * Generate 6 digit verification code
+     */
+    private function generateVerificationCode()
+    {
+        return str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Send verification email
+     */
+    private function sendVerificationEmail($email, $code, $name)
+    {
+        $subject = 'Email Verification Code';
+        $message = "
+            <h2>Hello {$name}!</h2>
+            <p>Thank you for registering. Please verify your email address using the code below:</p>
+            <h1 style='background: #f8f9fa; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 5px; color: #007bff;'>{$code}</h1>
+            <p>This code will expire in 15 minutes.</p>
+            <p>If you didn't create this account, please ignore this email.</p>
+            <br>
+            <p>Best regards,<br>Your App Team</p>
+        ";
+
+        // ✅ Kirim email menggunakan Laravel Mail
+        try {
+            Mail::send([], [], function ($mail) use ($email, $subject, $message) {
+                $mail->to($email)
+                     ->subject($subject)
+                     ->html($message);
+            });
+        } catch (\Exception $e) {
+            \Log::error('Failed to send verification email: ' . $e->getMessage());
+        }
     }
 }
