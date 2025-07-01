@@ -251,22 +251,23 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $user = Auth::user();
+        // $user = Auth::user();
 
-        // 1. Reset email verification status when user logs out
-        $user->performLogout();
+        // // 1. Reset email verification status when user logs out
+        // $user->performLogout();
 
-        // 2. Delete all tokens for this user
-        $user->tokens->each(function($token) {
-            $token->delete();
-        });
+        // // 2. Delete all tokens for this user
+        // $user->tokens->each(function($token) {
+        //     $token->delete();
+        // });
 
-        \Log::info("User {$user->id} logged out. Email verification reset.");
+        // \Log::info("User {$user->id} logged out. Email verification reset.");
 
-        return response()->json([
-            'status' => 200,
-            'message' => 'User logged out successfully!'
-        ], 200);
+        // return response()->json([
+        //     'status' => 200,
+        //     'message' => 'User logged out successfully!'
+        // ], 200);
+        dd(Auth::user());
     }
 
     // ✅ Helper Functions
