@@ -378,6 +378,90 @@ class AuthController extends Controller
     }
 
     /**
+     * Verify email code and auto-login (for smooth login flow)
+     */
+    public function verifyAndLogin(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+            'code' => 'required|string|size:6',
+        ]);
+
+        // First, verify the credentials
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return response()->json([
+                'status' => 401,
+                'message' => 'Invalid email or password.'
+            ], 401);
+        }
+
+        $user = Auth::user();
+
+        // If already verified, just return login success
+        if ($user->email_verified_at) {
+            $token = $user->createToken('API Token')->plainTextToken;
+            
+            return response()->json([
+                'status' => 200,
+                'data' => [
+                    'user' => $user,
+                    'token' => $token,
+                    'email_verified' => true,
+                ],
+                'message' => 'Login successful'
+            ], 200);
+        }
+
+        // Find the latest verification code for this email
+        $verification = EmailVerification::where('email', $request->email)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->latest()
+            ->first();
+
+        if (!$verification) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Verification code not found or expired. Please request a new code.'
+            ], 400);
+        }
+
+        // Verify the hashed code
+        if (!Hash::check($request->code, $verification->code)) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Invalid verification code.'
+            ], 400);
+        }
+
+        // Mark verification as used
+        $verification->is_used = true;
+        $verification->save();
+
+        // Mark email as verified
+        $user->email_verified_at = Carbon::now();
+        $user->save();
+
+        // Delete all verification codes for this user
+        EmailVerification::where('user_id', $user->id)->delete();
+
+        // Create token for successful login
+        $token = $user->createToken('API Token')->plainTextToken;
+
+        return response()->json([
+            'status' => 200,
+            'data' => [
+                'user' => $user->fresh(),
+                'token' => $token,
+                'email_verified' => true,
+                'verified_and_logged_in' => true
+            ],
+            'message' => 'Email verified successfully and logged in!'
+        ], 200);
+    }
+
+    /**
      * Send verification email
      */
     private function sendVerificationEmail($email, $code, $name)

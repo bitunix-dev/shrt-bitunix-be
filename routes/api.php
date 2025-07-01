@@ -14,6 +14,7 @@ Route::get('/qr/{id}', [UrlController::class, 'getQrCode']);
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
 Route::post('verify-email', [AuthController::class, 'verifyEmail']);
+Route::post('verify-and-login', [AuthController::class, 'verifyAndLogin']);
 Route::post('resend-verification', [AuthController::class, 'resendVerificationCode']);
 // Email verification routes
     Route::post('email/verify', [AuthController::class, 'verifyEmail']);
