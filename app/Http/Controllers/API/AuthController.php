@@ -70,6 +70,7 @@ class AuthController extends Controller
             'user_id' => $user->id,
             'email' => $user->email,
             'code' => Hash::make($verificationCode), // Hash the code for security
+            'context' => 'register', // This is from register flow
             'expires_at' => Carbon::now()->addMinutes(15),
         ]);
 
@@ -140,6 +141,27 @@ class AuthController extends Controller
         $user->email_verified_at = Carbon::now();
         $user->save();
 
+        // Check if this verification was from login flow
+        if ($verification->context === 'login') {
+            // Auto-login: Create token and return login response
+            $token = $user->createToken('API Token')->plainTextToken;
+
+            // Delete all verification codes for this user
+            EmailVerification::where('user_id', $user->id)->delete();
+
+            return response()->json([
+                'status' => 200,
+                'data' => [
+                    'user' => $user->fresh(),
+                    'token' => $token,
+                    'email_verified' => true,
+                    'auto_logged_in' => true
+                ],
+                'message' => 'Email verified successfully and logged in automatically!'
+            ], 200);
+        }
+
+        // If from register flow, just return verification success
         // Delete all verification codes for this user
         EmailVerification::where('user_id', $user->id)->delete();
 
@@ -206,6 +228,7 @@ class AuthController extends Controller
             'user_id' => $user->id,
             'email' => $user->email,
             'code' => Hash::make($verificationCode), // Hash the code for security
+            'context' => 'register', // Default context for resend
             'expires_at' => Carbon::now()->addMinutes(15),
         ]);
 
@@ -246,6 +269,7 @@ class AuthController extends Controller
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'code' => Hash::make($verificationCode),
+                    'context' => 'login', // This is from login flow
                     'expires_at' => Carbon::now()->addMinutes(15),
                 ]);
 

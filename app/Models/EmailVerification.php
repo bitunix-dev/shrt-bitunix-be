@@ -13,6 +13,7 @@ class EmailVerification extends Model
         'user_id',
         'email',
         'code',
+        'context',
         'expires_at',
         'is_used',
     ];
