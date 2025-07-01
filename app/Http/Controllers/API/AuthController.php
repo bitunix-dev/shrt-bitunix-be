@@ -62,28 +62,95 @@ class AuthController extends Controller
             'avatar' => $avatarPath,  // Simpan URL avatar dari Cloudinary
         ]);
 
+        // Generate & send 6-digit verification code
+        $verificationCode = $this->generateVerificationCode();
+        
+        // Save hashed verification code
+        EmailVerification::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'code' => Hash::make($verificationCode), // Hash the code for security
+            'expires_at' => Carbon::now()->addMinutes(15),
+        ]);
+
+        // Send verification email
+        $this->sendVerificationEmail($user->email, $verificationCode, $user->name);
+
         return response()->json([
             'status' => 201,
-            'data' => $user,
-            'message' => 'User registered successfully!'
+            'data' => [
+                'user' => $user,
+                'email_verification_required' => true
+            ],
+            'message' => 'User registered successfully! Please check your email for verification code.'
         ], 201);
     }
 
-    // ✅ Verify Email dengan 6 digit code
+    // Verify Email dengan 6 digit code (hashed)
     public function verifyEmail(Request $request)
     {
-        $user = Auth::user();
+        $request->validate([
+            'email' => 'required|string|email',
+            'code' => 'required|string|size:6',
+        ]);
 
-        // Here you would typically verify a token sent via email
-        // For now, we'll just mark as verified
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        if ($user->email_verified_at) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Email already verified.'
+            ], 400);
+        }
+
+        // Find the latest verification code for this email
+        $verification = EmailVerification::where('email', $request->email)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->latest()
+            ->first();
+
+        if (!$verification) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Verification code not found or expired. Please request a new code.'
+            ], 400);
+        }
+
+        // Verify the hashed code
+        if (!Hash::check($request->code, $verification->code)) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Invalid verification code.'
+            ], 400);
+        }
+
+        // Mark verification as used
+        $verification->is_used = true;
+        $verification->save();
+
+        // Mark email as verified
         $user->email_verified_at = Carbon::now();
         $user->save();
 
+        // Delete all verification codes for this user
+        EmailVerification::where('user_id', $user->id)->delete();
+
         return response()->json([
             'status' => 200,
-            'data' => $user,
-            'message' => 'Email verified successfully!'
-        ]);
+            'data' => [
+                'user' => $user->fresh(),
+                'email_verified' => true
+            ],
+            'message' => 'Email verified successfully! You can now login.'
+        ], 200);
     }
     public function resendEmailVerification(Request $request)
     {
@@ -128,17 +195,17 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // ✅ Delete old verification codes
+        // Delete old verification codes
         EmailVerification::where('email', $request->email)->delete();
 
-        // ✅ Generate new verification code
+        // Generate new verification code
         $verificationCode = $this->generateVerificationCode();
 
-        // ✅ Simpan verification code baru
+        // Save hashed verification code
         EmailVerification::create([
             'user_id' => $user->id,
             'email' => $user->email,
-            'code' => $verificationCode,
+            'code' => Hash::make($verificationCode), // Hash the code for security
             'expires_at' => Carbon::now()->addMinutes(15),
         ]);
 
@@ -151,7 +218,7 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Login - ✅ dengan pengecekan email verification
+    // Login - Block unverified users & auto-send verification code
     public function login(Request $request)
     {
         $request->validate([
@@ -165,14 +232,45 @@ class AuthController extends Controller
             // Check if email verification has expired (24 hours after login)
             $this->checkEmailVerificationExpiry($user);
 
+            // Check if email is verified
+            if (is_null($user->email_verified_at)) {
+                // Email not verified - generate & send new verification code
+                // Delete old verification codes
+                EmailVerification::where('email', $user->email)->delete();
+
+                // Generate new verification code
+                $verificationCode = $this->generateVerificationCode();
+
+                // Save hashed verification code
+                EmailVerification::create([
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'code' => Hash::make($verificationCode),
+                    'expires_at' => Carbon::now()->addMinutes(15),
+                ]);
+
+                // Send verification email
+                $this->sendVerificationEmail($user->email, $verificationCode, $user->name);
+
+                return response()->json([
+                    'status' => 401,
+                    'data' => [
+                        'email_verification_required' => true,
+                        'email' => $user->email
+                    ],
+                    'message' => 'Email verification required. We have sent a new verification code to your email.'
+                ], 401);
+            }
+
+            // Email verified - proceed with login
             $token = $user->createToken('API Token')->plainTextToken;
 
             return response()->json([
                 'status' => 200,
                 'data' => [
-                    'user' => $user->fresh(), // Refresh user data after potential verification reset
+                    'user' => $user->fresh(),
                     'token' => $token,
-                    'email_verified' => !is_null($user->email_verified_at),
+                    'email_verified' => true,
                 ],
                 'message' => 'Login successful'
             ], 200);
