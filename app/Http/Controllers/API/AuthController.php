@@ -282,11 +282,11 @@ class AuthController extends Controller
         $message = "
             <h2>Hello {$name}!</h2>
             <p>Thank you for registering. Please verify your email address using the code below:</p>
-            <h1 style='background: #f8f9fa; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 5px; color: #007bff;'>{$code}</h1>
+            <h1 style='background: #f3fde0; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 5px; color: #b9f641;'>{$code}</h1>
             <p>This code will expire in 15 minutes.</p>
             <p>If you didn't create this account, please ignore this email.</p>
             <br>
-            <p>Best regards,<br>Your App Team</p>
+            <p>Best regards,<br>Bitunix Shortener and UTM Builder App API</p>
         ";
 
         // ✅ Kirim email menggunakan Laravel Mail
