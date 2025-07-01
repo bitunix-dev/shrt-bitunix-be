@@ -282,7 +282,7 @@ class AuthController extends Controller
         $message = "
             <h2>Hello {$name}!</h2>
             <p>Thank you for registering. Please verify your email address using the code below:</p>
-            <h1 style='background: #f3fde0; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 5px; color: #b9f641;'>{$code}</h1>
+            <h1 style='background: #1a1919; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 5px; color: #b9f641;'>{$code}</h1>
             <p>This code will expire in 15 minutes.</p>
             <p>If you didn't create this account, please ignore this email.</p>
             <br>
