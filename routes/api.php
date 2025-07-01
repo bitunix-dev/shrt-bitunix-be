@@ -15,6 +15,9 @@ Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
 Route::post('verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('resend-verification', [AuthController::class, 'resendVerificationCode']);
+// Email verification routes
+    Route::post('email/verify', [AuthController::class, 'verifyEmail']);
+    Route::post('email/resend', [AuthController::class, 'resendEmailVerification']);
 Route::middleware('auth:sanctum')->put('update-name', [AuthController::class, 'updateName']);
 
 Route::middleware('auth:sanctum')->group(function () {

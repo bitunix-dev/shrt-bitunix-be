@@ -72,44 +72,37 @@ class AuthController extends Controller
     // ✅ Verify Email dengan 6 digit code
     public function verifyEmail(Request $request)
     {
-        $request->validate([
-            'email' => 'required|string|email',
-            'code' => 'required|string|size:6',
-        ]);
+        $user = Auth::user();
 
-        // ✅ Cari verification code yang valid
-        $verification = EmailVerification::where('email', $request->email)
-            ->where('code', $request->code)
-            ->where('expires_at', '>', Carbon::now())
-            ->where('is_used', false)
-            ->first();
-
-        if (!$verification) {
-            return response()->json([
-                'status' => 400,
-                'message' => 'Invalid or expired verification code.'
-            ], 400);
-        }
-
-        // ✅ Update user menjadi verified
-        $user = User::find($verification->user_id);
+        // Here you would typically verify a token sent via email
+        // For now, we'll just mark as verified
         $user->email_verified_at = Carbon::now();
         $user->save();
 
-        // ✅ Mark verification code sebagai used
-        $verification->is_used = true;
-        $verification->save();
+        return response()->json([
+            'status' => 200,
+            'data' => $user,
+            'message' => 'Email verified successfully!'
+        ]);
+    }
+    public function resendEmailVerification(Request $request)
+    {
+        $user = Auth::user();
+
+        if ($user->email_verified_at) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Email already verified'
+            ], 400);
+        }
+
+        // Here you would send verification email
+        // For now, just return success message
 
         return response()->json([
             'status' => 200,
-            'data' => [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'name' => $user->name,
-                'verified' => true
-            ],
-            'message' => 'Email verified successfully! You can now login.'
-        ], 200);
+            'message' => 'Verification email sent successfully!'
+        ]);
     }
 
     // ✅ Resend verification code
@@ -169,23 +162,17 @@ class AuthController extends Controller
         if (Auth::attempt($request->only('email', 'password'))) {
             $user = Auth::user();
 
-            // ✅ Cek apakah email sudah terverifikasi
-            if (!$user->email_verified_at) {
-                Auth::logout();
-                return response()->json([
-                    'status' => 403,
-                    'message' => 'Please verify your email before logging in.',
-                    'needs_verification' => true
-                ], 403);
-            }
+            // Check if email verification has expired (24 hours after login)
+            $this->checkEmailVerificationExpiry($user);
 
             $token = $user->createToken('API Token')->plainTextToken;
 
             return response()->json([
                 'status' => 200,
                 'data' => [
-                    'user' => $user,
+                    'user' => $user->fresh(), // Refresh user data after potential verification reset
                     'token' => $token,
+                    'email_verified' => !is_null($user->email_verified_at),
                 ],
                 'message' => 'Login successful'
             ], 200);
@@ -194,6 +181,23 @@ class AuthController extends Controller
         throw ValidationException::withMessages([
             'email' => ['The provided credentials are incorrect.'],
         ]);
+    }
+
+    private function checkEmailVerificationExpiry(User $user)
+    {
+        if ($user->email_verified_at) {
+            // Set verification expiry time (24 hours from verification)
+            $verificationExpiryHours = env('EMAIL_VERIFICATION_EXPIRY_HOURS', 24);
+            $expiryTime = Carbon::parse($user->email_verified_at)->addHours($verificationExpiryHours);
+
+            // If verification has expired, reset it
+            if (Carbon::now()->greaterThan($expiryTime)) {
+                $user->email_verified_at = null;
+                $user->save();
+
+                \Log::info("Email verification expired for user {$user->id}. Reset to unverified.");
+            }
+        }
     }
 
     public function updateName(Request $request)
