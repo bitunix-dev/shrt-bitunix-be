@@ -24,7 +24,22 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:users',
+                function ($attribute, $value, $fail) {
+                    // Validasi domain email - hanya terima @bitunix.com atau @bitunix.io
+                    $allowedDomains = ['bitunix.com', 'bitunix.io'];
+                    $emailDomain = substr(strrchr($value, "@"), 1);
+
+                    if (!in_array($emailDomain, $allowedDomains)) {
+                        $fail('Email harus menggunakan domain @bitunix.com atau @bitunix.io');
+                    }
+                }
+            ],
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -38,40 +53,19 @@ class AuthController extends Controller
         $name = ucwords($username);
 
         // Simpan avatar
-        $avatarPath = $this->saveAvatar($name);
+        $avatarPath = $this->saveAvatar($name); // Panggil fungsi untuk membuat dan menyimpan avatar ke Cloudinary
 
-        // ✅ Buat user dengan email_verified_at = null (belum terverifikasi)
         $user = User::create([
             'name' => $name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'avatar' => $avatarPath,
-            'email_verified_at' => null, // ✅ User belum terverifikasi
+            'avatar' => $avatarPath,  // Simpan URL avatar dari Cloudinary
         ]);
-
-        // ✅ Generate 6 digit verification code
-        $verificationCode = $this->generateVerificationCode();
-
-        // ✅ Simpan verification code ke database
-        EmailVerification::create([
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'code' => $verificationCode,
-            'expires_at' => Carbon::now()->addMinutes(15), // Expire dalam 15 menit
-        ]);
-
-        // ✅ Kirim email verification
-        $this->sendVerificationEmail($user->email, $verificationCode, $name);
 
         return response()->json([
             'status' => 201,
-            'data' => [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'name' => $user->name,
-                'verified' => false
-            ],
-            'message' => 'User registered successfully! Please check your email for verification code.'
+            'data' => $user,
+            'message' => 'User registered successfully!'
         ], 201);
     }
 
